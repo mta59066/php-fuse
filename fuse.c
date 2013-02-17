@@ -1706,11 +1706,12 @@ static PHP_METHOD(Fuse, mount) {
 }
 
 PHP_FUSE_API int php_fuse_opt_parse_proc(void* data, const char* arg, int key, struct fuse_args* outargs) {
-	TSRMLS_FETCH();
-	php_printf("----\nopt_parse_proc called from external. Key is %d, arg is %s, outargs.argc is %d, outargs.argv are:\n",key,arg,outargs->argc);
+//	php_printf("----\nopt_parse_proc called from external. Key is %d, arg is %s, outargs.argc is %d, outargs.argv are:\n",key,arg,outargs->argc);
 	int i;
-	for(i=0;i<outargs->argc;i++)
-		php_printf("'%s'\n",outargs->argv[i]);
+//	for(i=0;i<outargs->argc;i++)
+//		php_printf("'%s'\n",outargs->argv[i]);
+	
+	int ret=0;
 	
 	//step 1: convert the parameters to zvals so they can be passed to userland
 	zval* arg_data;
@@ -1776,7 +1777,8 @@ PHP_FUSE_API int php_fuse_opt_parse_proc(void* data, const char* arg, int key, s
 			php_error(E_ERROR,"php_fuse_opt_parse_proc: retval_ptr is null");
 		if(Z_TYPE_P(retval_ptr)!=IS_LONG)
 			php_error(E_ERROR,"php_fuse_opt_parse_proc: typeof(retval)!=int");
-		php_printf("php_fuse_opt_parse_proc: returned %d from userland\n",Z_LVAL_P(retval_ptr));
+//		php_printf("php_fuse_opt_parse_proc: returned %d from userland\n",Z_LVAL_P(retval_ptr));
+		ret=(int)Z_LVAL_P(retval_ptr);
 		arg_argv_hash=Z_ARRVAL_P(arg_argv);
 		arg_argv_size=zend_hash_num_elements(arg_argv_hash);
 		if(arg_argv_size!=Z_LVAL_P(arg_argc))
@@ -1787,9 +1789,9 @@ PHP_FUSE_API int php_fuse_opt_parse_proc(void* data, const char* arg, int key, s
 				php_error(E_WARNING,"php_fuse_opt_parse_proc: modified argv key %d is not a string (type %d/%s), converting silently",i,Z_TYPE_PP(d),zend_get_type_by_const(Z_TYPE_PP(d)));
 				convert_to_string_ex(d);
 			}
-			php_printf("Element %d: '",i);
-			php_write(Z_STRVAL_PP(d),Z_STRLEN_PP(d));
-			php_printf("'\n");
+//			php_printf("Element %d: '",i);
+//			php_write(Z_STRVAL_PP(d),Z_STRLEN_PP(d));
+//			php_printf("'\n");
 			fuse_opt_add_arg(outargs,Z_STRVAL_PP(d)); //one by one, add the stuff back
 			i++;
 		}
@@ -1798,10 +1800,10 @@ PHP_FUSE_API int php_fuse_opt_parse_proc(void* data, const char* arg, int key, s
 	}
 	
 	//step 3: clean up
-	php_printf("opt_parse_proc returned from userland. outargs.argc is %d, outargs.argv are:\n",outargs->argc);
-	for(i=0;i<outargs->argc;i++)
-		php_printf("'%s'\n",outargs->argv[i]);
-	php_printf("----\n");
+//	php_printf("opt_parse_proc returned from userland. outargs.argc is %d, outargs.argv are:\n",outargs->argc);
+//	for(i=0;i<outargs->argc;i++)
+//		php_printf("'%s'\n",outargs->argv[i]);
+//	php_printf("----\n");
 	
 	if(retval_ptr)
 		zval_ptr_dtor(&retval_ptr);
@@ -1810,7 +1812,7 @@ PHP_FUSE_API int php_fuse_opt_parse_proc(void* data, const char* arg, int key, s
 	zval_ptr_dtor(&arg_key);
 	zval_ptr_dtor(&arg_argc);
 	zval_ptr_dtor(&arg_argv);
-	return 1;
+	return ret;
 }
 
 static PHP_METHOD(Fuse, opt_parse) {
@@ -1869,20 +1871,20 @@ static PHP_METHOD(Fuse, opt_parse) {
 	}
 	
 	//now, make a fuse_args out of argc and the converted argv
-	php_printf("Fuse.opt_parse: going into fuse_opt_parse, fargs is now %d\n",fargs.argc);
-	for(i=0;i<fargs.argc;i++)
-		php_printf("'%s'\n",fargs.argv[i]);
+//	php_printf("Fuse.opt_parse: going into fuse_opt_parse, fargs is now %d\n",fargs.argc);
+//	for(i=0;i<fargs.argc;i++)
+//		php_printf("'%s'\n",fargs.argv[i]);
 
 	int ret=fuse_opt_parse(&fargs,NULL,NULL,php_fuse_opt_parse_proc);
 	if(ret==-1)
 		php_error(E_ERROR,"Fuse.opt_parse: fuse_opt_parse returned error");
 
-	php_printf("Fuse.opt_parse: returned from fuse_opt_parse, fargs is now %d\n",fargs.argc);
+//	php_printf("Fuse.opt_parse: returned from fuse_opt_parse, fargs is now %d\n",fargs.argc);
 	
 	//copy over to zval $av
 	zend_hash_clean(av_hash);
 	for(i=0;i<fargs.argc;i++) {
-		php_printf("'%s'\n",fargs.argv[i]);
+//		php_printf("'%s'\n",fargs.argv[i]);
 		add_index_string(av,i,fargs.argv[i],1);
 	}
 	ZVAL_LONG(z_ac,fargs.argc);
@@ -2156,6 +2158,8 @@ PHP_MINIT_FUNCTION(fuse) {
 
 	REGISTER_LONG_CONSTANT("FUSE_XATTR_CREATE", XATTR_CREATE, CONST_CS | CONST_PERSISTENT);
 	REGISTER_LONG_CONSTANT("FUSE_XATTR_REPLACE", XATTR_REPLACE, CONST_CS | CONST_PERSISTENT);
+	
+	REGISTER_LONG_CONSTANT("FUSE_OPT_KEY_NONOPT", FUSE_OPT_KEY_NONOPT, CONST_CS | CONST_PERSISTENT);
 	
 	ZEND_INIT_MODULE_GLOBALS(fuse, php_fuse_globals_ctor, php_fuse_globals_dtor);
 	
