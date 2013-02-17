@@ -1887,7 +1887,7 @@ static PHP_METHOD(Fuse, opt_parse) {
 //		php_printf("'%s'\n",fargs.argv[i]);
 	
 	//now, convert $opts
-/*	opts_hash=Z_ARRVAL_P(opts);
+	opts_hash=Z_ARRVAL_P(opts);
 	opts_size=zend_hash_num_elements(opts_hash);
 	
 	struct fuse_opt* fopts=safe_emalloc(sizeof(struct fuse_opt),opts_size+1,0);
@@ -1912,8 +1912,8 @@ static PHP_METHOD(Fuse, opt_parse) {
 	fopts[i].templ=NULL;
 	fopts[i].offset=0;
 	fopts[i].value=0;
-*/
-	int ret=fuse_opt_parse(&fargs,NULL,NULL,php_fuse_opt_parse_proc);
+
+	int ret=fuse_opt_parse(&fargs,NULL,fopts_static,php_fuse_opt_parse_proc);
 	if(ret==-1)
 		php_error(E_ERROR,"Fuse.opt_parse: fuse_opt_parse returned error");
 
@@ -1927,12 +1927,12 @@ static PHP_METHOD(Fuse, opt_parse) {
 	}
 	ZVAL_LONG(z_ac,fargs.argc);
 	
-/*	for(i=0;i<opts_size;i++) {
+	for(i=0;i<opts_size;i++) {
 		if(fopts[i].templ)
 			efree((char*) fopts[i].templ); //manually discard const flag
 	}
 	efree(fopts);
-*/	fuse_opt_free_args(&fargs);
+	fuse_opt_free_args(&fargs);
 	return;
 }
 
