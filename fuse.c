@@ -1706,6 +1706,7 @@ static PHP_METHOD(Fuse, mount) {
 }
 
 PHP_FUSE_API int php_fuse_opt_parse_proc(void* data, const char* arg, int key, struct fuse_args* outargs) {
+	TSRMLS_FETCH();
 	php_printf("----\nopt_parse_proc called from external. Key is %d, arg is %s, outargs.argc is %d, outargs.argv are:\n",key,arg,outargs->argc);
 	int i;
 	for(i=0;i<outargs->argc;i++)
@@ -1713,11 +1714,9 @@ PHP_FUSE_API int php_fuse_opt_parse_proc(void* data, const char* arg, int key, s
 	
 	//step 1: convert the parameters to zvals so they can be passed to userland
 	zval* arg_data;
-//	ALLOC_INIT_ZVAL(arg_data);
-//	ZVAL_NULL(arg_data);
-php_printf("faild");
+	ALLOC_INIT_ZVAL(arg_data);
 	array_init(arg_data);
-php_printf("lulz");	
+
 	zval* arg_arg;
 	ALLOC_INIT_ZVAL(arg_arg);
 	ZVAL_STRING(arg_arg,arg,1);
@@ -1731,11 +1730,30 @@ php_printf("lulz");
 	ZVAL_LONG(arg_argc,outargs->argc);
 	
 	zval* arg_argv;
-//	ALLOC_INIT_ZVAL(arg_argv);
-//	ZVAL_NULL(arg_argv);
+	zval* d;
+	HashTable* arg_argv_hash;
+	HashPosition arg_argv_ptr;
+	int arg_argv_size;
+	ALLOC_INIT_ZVAL(arg_argv);
 	array_init(arg_argv);
-	Z_SET_ISREF_P(arg_argv);
-	
+	for(i=0;i<outargs->argc;i++)
+		add_index_string(arg_argv,i,outargs->argv[i],1); //copy and duplicate
+
+	//Dump it
+	arg_argv_hash=Z_ARRVAL_P(arg_argv);
+	arg_argv_size=zend_hash_num_elements(arg_argv_hash);
+	php_printf("arg_argv contents (size: %d):\n",arg_argv_size);
+	for(zend_hash_internal_pointer_reset_ex(arg_argv_hash, &arg_argv_ptr); zend_hash_get_current_data_ex(arg_argv_hash, (void**) &d, &arg_argv_ptr) == SUCCESS; zend_hash_move_forward_ex(arg_argv_hash, &arg_argv_ptr)) {
+		if(Z_TYPE_P(d)!=IS_STRING) {
+			php_error(E_WARNING,"php_fuse_opt_parse_proc: modified argv key %d is not a string (type %d), converting silently",i,Z_TYPE_P(d));
+			convert_to_string(d);
+		}
+		php_printf("'");
+		php_write(Z_STRVAL_P(d),Z_STRLEN_P(d));
+		php_printf("'\n");
+		i++;
+	}
+
 	//step 2: call userland
 	zval** args[5], *retval_ptr;
 	args[0]=&arg_data;
@@ -1746,16 +1764,29 @@ php_printf("lulz");
 	FUSEG(proc_fci).retval_ptr_ptr=&retval_ptr;
 	FUSEG(proc_fci).param_count=5;
 	FUSEG(proc_fci).params=args;
+/*
 	if (zend_call_function(&FUSEG(proc_fci),&FUSEG(proc_fcic))==SUCCESS) {
 		if(!retval_ptr)
 			php_error(E_ERROR,"php_fuse_opt_parse_proc: retval_ptr is null");
 		if(Z_TYPE_P(retval_ptr)!=IS_LONG)
 			php_error(E_ERROR,"php_fuse_opt_parse_proc: typeof(retval)!=int");
 		php_printf("php_fuse_opt_parse_proc: returned %d from userland\n",Z_LVAL_P(retval_ptr));
+		arg_argv_hash=Z_ARRVAL_P(arg_argv);
+		arg_argv_size=zend_hash_num_elements(arg_argv_hash);
+		if(arg_argv_size!=Z_LVAL_P(arg_argc))
+			php_error(E_ERROR,"php_fuse_opt_parse_proc: size mismatch in modified argc=%d/sizeof(argv)=%d",Z_LVAL_P(arg_argc),arg_argv_size);
+		i=0;
+		for(zend_hash_internal_pointer_reset_ex(arg_argv_hash, &arg_argv_ptr); zend_hash_get_current_data_ex(arg_argv_hash, (void**) &d, &arg_argv_ptr) == SUCCESS; zend_hash_move_forward_ex(arg_argv_hash, &arg_argv_ptr)) {
+			if(Z_TYPE_P(d)!=IS_STRING) {
+				php_error(E_WARNING,"php_fuse_opt_parse_proc: modified argv key %d is not a string (type %d), converting silently",i,Z_TYPE_P(d));
+				convert_to_string(d);
+			}
+			i++;
+		}
 	} else {
 		php_error(E_ERROR,"php_fuse_opt_parse_proc: Userland returned failure");
 	}
-	
+*/	
 	//step 3: clean up
 	php_printf("opt_parse_proc returned from userland. outargs.argc is %d, outargs.argv are:\n",outargs->argc);
 	for(i=0;i<outargs->argc;i++)
