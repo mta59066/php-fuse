@@ -22,7 +22,7 @@
 #define MAKE_LONG_ZVAL(name, val)	MAKE_STD_ZVAL(name); ZVAL_LONG(name, val);
 
 /* {{{ fuse_functions[] */
-function_entry fuse_functions[] = {
+zend_function_entry fuse_functions[] = {
 	{ NULL, NULL, NULL }
 };
 /* }}} */
