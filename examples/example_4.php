@@ -1,6 +1,7 @@
 <?php
 //See https://github.com/jrk/passfs/blob/master/opts.c for the C equivalent of this file
-
+dl("fuse.so");
+error_reporting(E_ALL);
 class Sample4Fuse extends Fuse {
  
  public function __construct() {
@@ -46,6 +47,7 @@ class Sample4Fuse extends Fuse {
  }
  public function opt_proc($data,$arg,$key,&$argc,&$argv) {
    printf("opt_proc called. arg is '%s', key is %d, argc is %d, argv is ('%s'), data is\n%s\n",$arg,$key,$argc,implode("', '",$argv),print_r($data,true));
+   $argv[0].="fail";
    return 1;
  }
   public function getdir($path, &$retval) { 
