@@ -1856,27 +1856,26 @@ static PHP_METHOD(Fuse, opt_parse) {
 	
 	//make a C array out of argv
 	zval** d;
-	char** av_c=safe_emalloc(ac,sizeof(char*),0);
+	struct fuse_args fargs= { 0, NULL, 0 };
 	i=0;
 	for(zend_hash_internal_pointer_reset_ex(av_hash, &av_ptr); zend_hash_get_current_data_ex(av_hash, (void**) &d, &av_ptr) == SUCCESS; zend_hash_move_forward_ex(av_hash, &av_ptr)) {
 		convert_to_string_ex(d);
-		av_c[i]=Z_STRVAL_PP(d);
+		fuse_opt_add_arg(&fargs, Z_STRVAL_PP(d));
 		i++;
 	}
 	
 	//now, make a fuse_args out of argc and the converted argv
-	//TODO: FIX THAT long->int cast OR MAKE IT AT LEAST SOMEWHAT FUCKING CORRECT
-	struct fuse_args fargs=FUSE_ARGS_INIT((int)ac,av_c);
 	php_printf("Fuse.opt_parse: going into fuse_opt_parse, fargs is now %d\n",fargs.argc);
 	for(i=0;i<fargs.argc;i++)
 		php_printf("'%s'\n",fargs.argv[i]);
+
 	int ret=fuse_opt_parse(&fargs,NULL,NULL,php_fuse_opt_parse_proc);
 	if(ret==-1)
 		php_error(E_ERROR,"Fuse.opt_parse: fuse_opt_parse returned error");
+
 	php_printf("Fuse.opt_parse: returned from fuse_opt_parse, fargs is now %d\n",fargs.argc);
 	for(i=0;i<fargs.argc;i++)
 		php_printf("'%s'\n",fargs.argv[i]);
-	efree(av_c);
 	return;
 }
 
