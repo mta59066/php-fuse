@@ -1531,8 +1531,11 @@ static zend_object_value php_fuse_object_handler_new(zend_class_entry *ce TSRMLS
 	memset(intern, 0, sizeof(php_fuse_object));
 
 	zend_object_std_init(&intern->zo, ce TSRMLS_CC);
+#if PHP_VERSION_ID < 50399
 	zend_hash_copy(intern->zo.properties, &ce->default_properties, (copy_ctor_func_t)zval_add_ref, (void*)&tmp, sizeof(zval*));
-
+#else
+	object_properties_init((zend_object*) intern, ce);
+#endif
 	retval.handle = zend_objects_store_put(intern, (zend_objects_store_dtor_t)zend_objects_destroy_object, (zend_objects_free_object_storage_t)php_fuse_object_free_storage, NULL TSRMLS_CC);
 #if PHP_VERSION_ID < 50300
 	retval.handlers = EG(ze1_compatibility_mode) ? &php_fuse_object_handlers_ze1 : &php_fuse_object_handlers;
