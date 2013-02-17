@@ -1874,12 +1874,38 @@ static PHP_METHOD(Fuse, opt_parse) {
 //	php_printf("Fuse.opt_parse: going into fuse_opt_parse, fargs is now %d\n",fargs.argc);
 //	for(i=0;i<fargs.argc;i++)
 //		php_printf("'%s'\n",fargs.argv[i]);
+	
+	//now, convert $opts
+	opts_hash=Z_ARRVAL_P(opts);
+	opts_size=zend_hash_num_elements(opts_hash);
+	
+	struct fuse_opt* fopts=safe_emalloc(sizeof(struct fuse_opt),opts_size+1,0);
+	memset(fopts,0,(sizeof(struct fuse_opt)*(opts_size+1)));
+	i=0;
+	php_printf("walking through %d opts, assigned %d bytes of RAM for %d bytes wide struct\n",opts_size,(sizeof(struct fuse_opt)*(opts_size+1)),sizeof(struct fuse_opt));
+	for(zend_hash_internal_pointer_reset_ex(opts_hash, &opts_ptr); zend_hash_get_current_data_ex(opts_hash, (void**) &d, &opts_ptr) == SUCCESS; zend_hash_move_forward_ex(opts_hash, &opts_ptr)) {
+		char* key;
+		int key_len;
+		long index;
+		if(Z_TYPE_PP(d)!=IS_LONG)
+			php_error(E_ERROR,"Value of element %d is not an integer",i);
+		if(zend_hash_get_current_key_ex(opts_hash, &key, &key_len, &index, 0, &opts_ptr) != HASH_KEY_IS_STRING)
+			php_error(E_ERROR,"Key of element %d is not a string",i);
 
-	int ret=fuse_opt_parse(&fargs,NULL,NULL,php_fuse_opt_parse_proc);
+		fopts[i].templ=estrndup(key,key_len);
+		fopts[i].offset=0;
+		fopts[i].value=Z_LVAL_PP(d);
+		i++;
+        }
+	fopts[i].templ=NULL;
+	fopts[i].offset=0;
+	fopts[i].value=0;
+
+	int ret=fuse_opt_parse(&fargs,NULL,fopts,php_fuse_opt_parse_proc);
 	if(ret==-1)
 		php_error(E_ERROR,"Fuse.opt_parse: fuse_opt_parse returned error");
 
-//	php_printf("Fuse.opt_parse: returned from fuse_opt_parse, fargs is now %d\n",fargs.argc);
+	php_printf("Fuse.opt_parse: returned from fuse_opt_parse, fargs is now %d\n",fargs.argc);
 	
 	//copy over to zval $av
 	zend_hash_clean(av_hash);
@@ -1889,6 +1915,11 @@ static PHP_METHOD(Fuse, opt_parse) {
 	}
 	ZVAL_LONG(z_ac,fargs.argc);
 	
+	for(i=0;i<opts_size;i++) {
+		if(fopts[i].templ)
+			efree((char*) fopts[i].templ); //manually discard const flag
+	}
+	efree(fopts);
 	fuse_opt_free_args(&fargs);
 	return;
 }
