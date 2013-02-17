@@ -1748,7 +1748,7 @@ PHP_FUSE_API int php_fuse_opt_parse_proc(void* data, const char* arg, int key, s
 	i=0;
 	for(zend_hash_internal_pointer_reset_ex(arg_argv_hash, &arg_argv_ptr); zend_hash_get_current_data_ex(arg_argv_hash, (void**) &d, &arg_argv_ptr) == SUCCESS; zend_hash_move_forward_ex(arg_argv_hash, &arg_argv_ptr)) {
 		if(Z_TYPE_PP(d)!=IS_STRING) {
-			php_error(E_WARNING,"php_fuse_opt_parse_proc: modified argv key %d is not a string (type %d), converting silently",i,Z_TYPE_PP(d));
+			php_error(E_WARNING,"php_fuse_opt_parse_proc: modified argv key %d is not a string (type %d/%s), converting silently",i,Z_TYPE_PP(d),zend_get_type_by_const(Z_TYPE_PP(d)));
 			convert_to_string_ex(d);
 		}
 		php_printf("Element %d: '",i);
@@ -1784,12 +1784,13 @@ PHP_FUSE_API int php_fuse_opt_parse_proc(void* data, const char* arg, int key, s
 		i=0;
 		for(zend_hash_internal_pointer_reset_ex(arg_argv_hash, &arg_argv_ptr); zend_hash_get_current_data_ex(arg_argv_hash, (void**) &d, &arg_argv_ptr) == SUCCESS; zend_hash_move_forward_ex(arg_argv_hash, &arg_argv_ptr)) {
 			if(Z_TYPE_PP(d)!=IS_STRING) {
-				php_error(E_WARNING,"php_fuse_opt_parse_proc: modified argv key %d is not a string (type %d), converting silently",i,Z_TYPE_PP(d));
+				php_error(E_WARNING,"php_fuse_opt_parse_proc: modified argv key %d is not a string (type %d/%s), converting silently",i,Z_TYPE_PP(d),zend_get_type_by_const(Z_TYPE_PP(d)));
 				convert_to_string_ex(d);
 			}
 			php_printf("Element %d: '",i);
 			php_write(Z_STRVAL_PP(d),Z_STRLEN_PP(d));
 			php_printf("'\n");
+			fuse_opt_add_arg(outargs,Z_STRVAL_PP(d)); //one by one, add the stuff back
 			i++;
 		}
 	} else {
