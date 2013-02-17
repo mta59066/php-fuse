@@ -1701,11 +1701,151 @@ static PHP_METHOD(Fuse, mount) {
 
 	return;
 }
+
+PHP_FUSE_API int php_fuse_opt_parse_proc(void* data, const char* arg, int key, struct fuse_args* outargs) {
+	php_printf("----\nopt_parse_proc called from external. Key is %d, arg is %s, outargs.argc is %d, outargs.argv are:\n",key,arg,outargs->argc);
+	int i;
+	for(i=0;i<outargs->argc;i++)
+		php_printf("'%s'\n",outargs->argv[i]);
+	
+	//step 1: convert the parameters to zvals so they can be passed to userland
+	zval* arg_data;
+//	ALLOC_INIT_ZVAL(arg_data);
+//	ZVAL_NULL(arg_data);
+	array_init(arg_data);
+	
+	zval* arg_arg;
+	ALLOC_INIT_ZVAL(arg_arg);
+	ZVAL_STRING(arg_arg,arg,1);
+	
+	zval* arg_key;
+	ALLOC_INIT_ZVAL(arg_key);
+	ZVAL_LONG(arg_key,key);
+	
+	zval* arg_argc;
+	ALLOC_INIT_ZVAL(arg_argc);
+	ZVAL_LONG(arg_argc,outargs->argc);
+	
+	zval* arg_argv;
+//	ALLOC_INIT_ZVAL(arg_argv);
+//	ZVAL_NULL(arg_argv);
+	array_init(arg_argv);
+	
+	//step 2: call userland
+	zval** args[5], *retval_ptr;
+	args[0]=&arg_data;
+	args[1]=&arg_arg;
+	args[2]=&arg_key;
+	args[3]=&arg_argc;
+	args[4]=&arg_argv;
+	FUSEG(proc_fci).retval_ptr_ptr=&retval_ptr;
+	FUSEG(proc_fci).param_count=5;
+	FUSEG(proc_fci).params=args;
+	if (zend_call_function(&FUSEG(proc_fci),&FUSEG(proc_fcic))==SUCCESS) {
+		if(!retval_ptr)
+			php_error(E_ERROR,"php_fuse_opt_parse_proc: retval_ptr is null");
+		if(Z_TYPE_P(retval_ptr)!=IS_LONG)
+			php_error(E_ERROR,"php_fuse_opt_parse_proc: typeof(retval)!=int");
+		php_printf("php_fuse_opt_parse_proc: returned %d from userland\n",Z_LVAL_P(retval_ptr));
+	} else {
+		php_error(E_ERROR,"php_fuse_opt_parse_proc: Userland returned failure");
+	}
+	
+	//step 3: clean up
+	php_printf("opt_parse_proc returned from userland. outargs.argc is %d, outargs.argv are:\n",outargs->argc);
+	for(i=0;i<outargs->argc;i++)
+		php_printf("'%s'\n",outargs->argv[i]);
+	php_printf("----\n");
+	
+	if(retval_ptr)
+		zval_ptr_dtor(&retval_ptr);
+	zval_ptr_dtor(&arg_data);
+	zval_ptr_dtor(&arg_arg);
+	zval_ptr_dtor(&arg_key);
+	zval_ptr_dtor(&arg_argc);
+	zval_ptr_dtor(&arg_argv);
+	return 1;
+}
+
+static PHP_METHOD(Fuse, opt_parse) {
+	zval *object = getThis();
+	int i;
+	
+	//int $argc
+	long ac;
+	//string[] $argv
+	zval* av;
+	HashTable* av_hash;
+	HashPosition av_ptr;
+	int av_size;
+	//mixed[] $data (unused for now!)
+	zval* data;
+	HashTable* data_hash;
+	HashPosition data_ptr;
+	int data_size;
+	//mixed[] $opts
+	zval* opts;
+	HashTable* opts_hash;
+	HashPosition opts_ptr;
+	int opts_size;
+	//callable $proc is stored in globals (FUSEG(proc_fci), FUSEG(proc_fcic))
+	
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "laaaf", &ac, &av, &data, &opts, &FUSEG(proc_fci), &FUSEG(proc_fcic)) == FAILURE) {
+		return;
+	}
+	
+	//Sanity checks for argc/argv
+	av_hash=Z_ARRVAL_P(av);
+	av_size=zend_hash_num_elements(av_hash);
+	
+	if(ac!=av_size) {
+		php_error(E_ERROR,"Fuse.args_init: argc/sizeof(argv) mismatch: argc is %d, sizeof(argv) is %d",ac,av_size);
+		RETURN_FAILURE();
+	}
+	if(ac==0) {
+		php_error(E_NOTICE,"Fuse.args_init: argv is empty");
+		RETURN_NULL();
+	}
+	
+	
+	//make a C array out of argv
+	zval** d;
+	char** av_c=safe_emalloc(ac,sizeof(char*),0);
+	i=0;
+	for(zend_hash_internal_pointer_reset_ex(av_hash, &av_ptr); zend_hash_get_current_data_ex(av_hash, (void**) &d, &av_ptr) == SUCCESS; zend_hash_move_forward_ex(av_hash, &av_ptr)) {
+		convert_to_string_ex(d);
+		av_c[i]=Z_STRVAL_PP(d);
+		i++;
+	}
+	
+	//now, make a fuse_args out of argc and the converted argv
+	//TODO: FIX THAT long->int cast OR MAKE IT AT LEAST SOMEWHAT FUCKING CORRECT
+	struct fuse_args fargs=FUSE_ARGS_INIT((int)ac,av_c);
+	php_printf("Fuse.opt_parse: going into fuse_opt_parse, fargs is now %d\n",fargs.argc);
+	for(i=0;i<fargs.argc;i++)
+		php_printf("'%s'\n",fargs.argv[i]);
+	int ret=fuse_opt_parse(&fargs,NULL,NULL,php_fuse_opt_parse_proc);
+	if(ret==-1)
+		php_error(E_ERROR,"Fuse.opt_parse: fuse_opt_parse returned error");
+	
+	php_printf("Fuse.opt_parse: returned from fuse_opt_parse, fargs is now %d\n",fargs.argc);
+	for(i=0;i<fargs.argc;i++)
+		php_printf("'%s'\n",fargs.argv[i]);
+	return;
+}
+
 /* }}} */
 
 /* {{{ fuse method entries */
 ZEND_BEGIN_ARG_INFO_EX(arginfo_fuse_mount, 0, 0, 1)
 	ZEND_ARG_INFO(0, path)				// string
+ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_INFO_EX(arginfo_fuse_opt_parse, 0, 0, 2)
+	ZEND_ARG_INFO(0, argc)				// int
+	ZEND_ARG_INFO(1, argv)				// [ref] array
+	ZEND_ARG_INFO(1, data)				// [ref] array
+	ZEND_ARG_INFO(0, opts)				// array
+	ZEND_ARG_INFO(0, proc)				// callable
 ZEND_END_ARG_INFO()
 
 /*
@@ -1823,8 +1963,8 @@ ZEND_END_ARG_INFO()
 
 zend_function_entry php_fuse_methods[] = {
 	ZEND_MALIAS(Fuse,	__construct,	fuse_constructor,	NULL,	ZEND_ACC_PUBLIC)
-	PHP_ME(Fuse,	mount,			arginfo_fuse_mount,			ZEND_ACC_PUBLIC|ZEND_ACC_FINAL)
-
+	PHP_ME(Fuse,	mount,			arginfo_fuse_mount,		ZEND_ACC_PUBLIC|ZEND_ACC_FINAL)
+	PHP_ME(Fuse,	opt_parse,		arginfo_fuse_opt_parse,		ZEND_ACC_PUBLIC|ZEND_ACC_FINAL)
 	/*
     PHP_ME(Fuse,	getattr,		arginfo_fuse_getattr,		ZEND_ACC_PUBLIC)
     PHP_ME(Fuse,	readlink,		arginfo_fuse_readlink,		ZEND_ACC_PUBLIC)

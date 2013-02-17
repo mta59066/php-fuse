@@ -62,6 +62,8 @@ pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
 
 ZEND_BEGIN_MODULE_GLOBALS(fuse)
 	zval			*active_object;
+	zend_fcall_info proc_fci;
+	zend_fcall_info_cache proc_fcic;
 ZEND_END_MODULE_GLOBALS(fuse)
 
 extern zend_module_entry fuse_module_entry;
