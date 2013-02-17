@@ -1712,8 +1712,9 @@ PHP_FUSE_API int php_fuse_opt_parse_proc(void* data, const char* arg, int key, s
 	zval* arg_data;
 //	ALLOC_INIT_ZVAL(arg_data);
 //	ZVAL_NULL(arg_data);
+php_printf("faild");
 	array_init(arg_data);
-	
+php_printf("lulz");	
 	zval* arg_arg;
 	ALLOC_INIT_ZVAL(arg_arg);
 	ZVAL_STRING(arg_arg,arg,1);
@@ -1730,6 +1731,7 @@ PHP_FUSE_API int php_fuse_opt_parse_proc(void* data, const char* arg, int key, s
 //	ALLOC_INIT_ZVAL(arg_argv);
 //	ZVAL_NULL(arg_argv);
 	array_init(arg_argv);
+	Z_SET_ISREF_P(arg_argv);
 	
 	//step 2: call userland
 	zval** args[5], *retval_ptr;
