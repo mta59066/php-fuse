@@ -1818,6 +1818,7 @@ static PHP_METHOD(Fuse, opt_parse) {
 	int i;
 	
 	//int $argc
+	zval* z_ac;
 	long ac;
 	//string[] $argv
 	zval* av;
@@ -1836,11 +1837,14 @@ static PHP_METHOD(Fuse, opt_parse) {
 	int opts_size;
 	//callable $proc is stored in globals (FUSEG(proc_fci), FUSEG(proc_fcic))
 	
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "laaaf", &ac, &av, &data, &opts, &FUSEG(proc_fci), &FUSEG(proc_fcic)) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "zaaaf", &z_ac, &av, &data, &opts, &FUSEG(proc_fci), &FUSEG(proc_fcic)) == FAILURE) {
 		return;
 	}
 	
 	//Sanity checks for argc/argv
+	if(Z_TYPE_P(z_ac)!=IS_LONG)
+		php_error(E_ERROR,"Fuse.args_init: argc is not an integer");
+	ac=Z_LVAL_P(z_ac);
 	av_hash=Z_ARRVAL_P(av);
 	av_size=zend_hash_num_elements(av_hash);
 	
@@ -1874,8 +1878,16 @@ static PHP_METHOD(Fuse, opt_parse) {
 		php_error(E_ERROR,"Fuse.opt_parse: fuse_opt_parse returned error");
 
 	php_printf("Fuse.opt_parse: returned from fuse_opt_parse, fargs is now %d\n",fargs.argc);
-	for(i=0;i<fargs.argc;i++)
+	
+	//copy over to zval $av
+	zend_hash_clean(av_hash);
+	for(i=0;i<fargs.argc;i++) {
 		php_printf("'%s'\n",fargs.argv[i]);
+		add_index_string(av,i,fargs.argv[i],1);
+	}
+	ZVAL_LONG(z_ac,fargs.argc);
+	
+	fuse_opt_free_args(&fargs);
 	return;
 }
 
@@ -1886,7 +1898,7 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_fuse_mount, 0, 0, 1)
 	ZEND_ARG_INFO(0, path)				// string
 ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_INFO_EX(arginfo_fuse_opt_parse, 0, 0, 2)
-	ZEND_ARG_INFO(0, argc)				// int
+	ZEND_ARG_INFO(1, argc)				// int
 	ZEND_ARG_INFO(1, argv)				// [ref] array
 	ZEND_ARG_INFO(1, data)				// [ref] array
 	ZEND_ARG_INFO(0, opts)				// array
