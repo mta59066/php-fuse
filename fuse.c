@@ -1913,7 +1913,7 @@ static PHP_METHOD(Fuse, opt_parse) {
 	fopts[i].offset=0;
 	fopts[i].value=0;
 
-	int ret=fuse_opt_parse(&fargs,NULL,fopts_static,php_fuse_opt_parse_proc);
+	int ret=fuse_opt_parse(&fargs,NULL,fopts,php_fuse_opt_parse_proc);
 	if(ret==-1)
 		php_error(E_ERROR,"Fuse.opt_parse: fuse_opt_parse returned error");
 
