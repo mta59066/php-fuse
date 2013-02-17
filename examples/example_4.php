@@ -3,7 +3,8 @@
 if (!extension_loaded("fuse")) dl("fuse.so");
 error_reporting(E_ALL);
 class Sample4Fuse extends Fuse {
- 
+  public $root="";
+ public $stats_enabled=false;
  public function __construct() {
   //The enum at line 27, as PHP doesn't know enums, use $i as hack
   //Do not forget $i++, else opt_parse will whine.
@@ -45,10 +46,76 @@ class Sample4Fuse extends Fuse {
   }
   printf("argc now %d, argv now ('%s')\n",$argc,implode("', '",$argv));
  }
+ 
  public function opt_proc($data,$arg,$key,&$argc,&$argv) {
+   // return -1 to indicate error, 0 to accept parameter,1 to retain parameter and pase to FUSE
    printf("opt_proc called. arg is '%s', key is %d, argc is %d, argv is ('%s'), data is\n%s\n",$arg,$key,$argc,implode("', '",$argv),print_r($data,true));
-   $argv[0].="fail";
-   return 1;
+   switch($key) {
+     case FUSE_OPT_KEY_NONOPT:
+       if($this->root=="") {
+         $this->root=$arg;
+         return 0;
+       } else
+         return 1;
+       break;
+      case $this->argopt_keys["KEY_STATS"]:
+        $this->stats_enabled=1;
+        return 0;
+      break;
+      case $this->argopt_keys["KEY_FUSE_HELP"]:
+        array_push($argv,"-ho");
+        $argc++;
+      case $this->argopt_keys["KEY_HELP"]:
+        printf("php-fusepassfs
+by John Cobb <j.c.cobb@qmul.ac.uk>, adapted to PHP by Marco Schuster <marco@m-s-d.eu>
+
+FUSE demo
+
+Usage: %s [options] root_path mountpoint
+
+Options:
+    -o opt,[opt...]           mount options
+    -h --help                 this help
+    -H                        more help
+    -V --version              print version info
+
+Options specific to php-fusepassfs:
+    -m                        monitor to STDOUT
+    -m=file                   monitor to file
+    -D                        implement use of offset in readdir interface
+    -o stats                  show statistics in the file 'stats' under the mountpoint
+",$argv[0]);
+        return 0;
+      break;
+      case $this->argopt_keys["KEY_VERSION"]:
+        printf("php-fusepassfs v. 0.1.3.3.7\n");
+        return 1;
+      break;
+      case $this->argopt_keys["KEY_DEBUG"]:
+        printf("debug mode enabled\n");
+        return 1;
+      break;
+      case $this->argopt_keys["KEY_MONITOR"]:
+        printf("monitor in fg\n");
+        array_push($argv,"-f");
+        $argc++;
+        return 0;
+      break;
+      case $this->argopt_keys["KEY_DIR_METHOD2"]:
+        $this->use_readdir_method2=true;
+        return 0;
+      break;
+      case $this->argopt_keys["KEY_MONITOR_FILE"]:
+        printf("monitor to file '%s'\n",$arg);
+        return 0;
+      break;
+      case $this->argopt_keys["KEY_DEMO_SPACE"]:
+        printf("demonstration parameter -n value=%s\n",$arg);
+        return 0;
+      break;
+      default:
+        return 1;
+   }
  }
   public function getdir($path, &$retval) { 
     if ($path != "/") {
