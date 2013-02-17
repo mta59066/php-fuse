@@ -1872,10 +1872,10 @@ static PHP_METHOD(Fuse, opt_parse) {
 	int ret=fuse_opt_parse(&fargs,NULL,NULL,php_fuse_opt_parse_proc);
 	if(ret==-1)
 		php_error(E_ERROR,"Fuse.opt_parse: fuse_opt_parse returned error");
-	
 	php_printf("Fuse.opt_parse: returned from fuse_opt_parse, fargs is now %d\n",fargs.argc);
 	for(i=0;i<fargs.argc;i++)
 		php_printf("'%s'\n",fargs.argv[i]);
+	safe_efree(av_c);
 	return;
 }
 
