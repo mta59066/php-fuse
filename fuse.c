@@ -1875,7 +1875,7 @@ static PHP_METHOD(Fuse, opt_parse) {
 	php_printf("Fuse.opt_parse: returned from fuse_opt_parse, fargs is now %d\n",fargs.argc);
 	for(i=0;i<fargs.argc;i++)
 		php_printf("'%s'\n",fargs.argv[i]);
-	safe_efree(av_c);
+	efree(av_c);
 	return;
 }
 
