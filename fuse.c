@@ -1761,8 +1761,6 @@ PHP_FUSE_API int php_fuse_opt_parse_proc(void* data, const char* arg, int key, s
 	//step 2: call userland
 	zval** args[5], *retval_ptr;
 
-	ALLOC_INIT_ZVAL(retval_ptr);	
-
 	args[0]=&arg_data;
 	args[1]=&arg_arg;
 	args[2]=&arg_key;
