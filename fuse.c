@@ -1705,6 +1705,205 @@ static PHP_METHOD(Fuse, mount) {
 	return;
 }
 
+//Helper method: assemble a userdata struct out of a PHP ZVAL array following the format in the docs
+zval* php_fuse_get_udata(void* udata) {
+	zval* ret;
+	ALLOC_INIT_ZVAL(ret);
+	array_init(ret);
+
+	zval* array=*(zval**)((char*)(udata)+0);
+	
+	HashTable* array_hash=Z_ARRVAL_P(array);
+	HashPosition array_ptr;
+	int array_size=zend_hash_num_elements(array_hash);
+	php_printf("php_fuse_get_udata: init with %d elements\n",array_size);
+	
+	if(array_size==0) //nothing to do here
+		return;
+	
+	int i=0;
+	zval** d;
+	unsigned long cur_offset=sizeof(void*);//for fuse_opt.offset
+	
+	for(zend_hash_internal_pointer_reset_ex(array_hash, &array_ptr); zend_hash_get_current_data_ex(array_hash, (void**) &d, &array_ptr) == SUCCESS; zend_hash_move_forward_ex(array_hash, &array_ptr)) {
+		zval** initial; //initial value for the udata field
+		zval** v;	//the value of the zval, temp
+		
+		php_printf("Element %d, type %d/%s\n",i,Z_TYPE_PP(d),zend_get_type_by_const(Z_TYPE_PP(d)));
+		if(Z_TYPE_PP(d)!=IS_ARRAY)
+			php_error(E_ERROR,"Fuse.opt_parse: element %d is not an array",i);
+		HashTable* d_hash=Z_ARRVAL_PP(d);
+		
+		if(zend_hash_find(d_hash,"value",sizeof("value"),(void**) &v)!=SUCCESS)
+			php_error(E_ERROR,"Fuse.opt_parse: element %d doesn't contain a value key",i);
+		initial=v;
+		
+		php_printf("Element %d, current offset %ld\n",i,cur_offset);
+		switch(Z_TYPE_PP(initial)) {
+			case IS_LONG:
+				add_next_index_long(ret,*(long*)((char*)(udata)+cur_offset));
+				cur_offset+=sizeof(long);
+			break;
+			case IS_STRING:
+				add_next_index_string(ret,*(char**)((char*)(udata)+cur_offset),1);
+				cur_offset+=sizeof(char*)*2;
+			break;
+			default:
+				php_error(E_ERROR,"Fuse.opt_parse: element %d initial value is neither int nor string",i);
+		}
+		i++;
+	}
+
+	return ret;
+}
+//Helper method: update the values in a PHP ZVAL array following the format in the docs
+void php_fuse_set_udata(zval* array, void* udata) {
+}
+//Helper method: allocate and initialize udata from PHP ZVAL array; modify fopts array to accomodate new options
+void* php_fuse_init_udata(zval* array, struct fuse_opt** fopts, int* num_fopts) {
+	HashTable* array_hash=Z_ARRVAL_P(array);
+	HashPosition array_ptr;
+	int array_size=zend_hash_num_elements(array_hash);
+//	php_printf("php_fuse_init_udata: init with %d elements, fopts array has %d elements\n",array_size,*num_fopts);
+	
+	if(array_size==0) //nothing to do here
+		return NULL;
+	
+	int i=0;
+	zval** d;
+	unsigned long cur_offset=sizeof(void*);//for fuse_opt.offset
+	size_t size=sizeof(void*);
+//	php_printf("Allocating %d bytes, sizeof is %d\n",size,cur_offset);
+	void* udata=emalloc(size);
+//	php_printf("udata located @ 0x%lx\n",udata);
+	*(zval**)((char*)(udata)+0)=array;
+	
+	for(zend_hash_internal_pointer_reset_ex(array_hash, &array_ptr); zend_hash_get_current_data_ex(array_hash, (void**) &d, &array_ptr) == SUCCESS; zend_hash_move_forward_ex(array_hash, &array_ptr)) {
+		zval** templ;
+		zval** initial; //initial value for the udata field
+		zval** key;
+		
+//		php_printf("Element %d, type %d/%s\n",i,Z_TYPE_PP(d),zend_get_type_by_const(Z_TYPE_PP(d)));
+		if(Z_TYPE_PP(d)!=IS_ARRAY)
+			php_error(E_ERROR,"Fuse.opt_parse: element %d is not an array",i);
+		HashTable* d_hash=Z_ARRVAL_PP(d);
+		
+		if(zend_hash_find(d_hash,"templ",sizeof("templ"),(void**) &templ)!=SUCCESS)
+			php_error(E_ERROR,"Fuse.opt_parse: element %d doesn't contain a templ key",i);
+		if(Z_TYPE_PP(templ)!=IS_STRING)
+			php_error(E_ERROR,"Fuse.opt_parse: element %d key templ is not a string",i);
+		
+		if(zend_hash_find(d_hash,"value",sizeof("value"),(void**) &initial)!=SUCCESS)
+			php_error(E_ERROR,"Fuse.opt_parse: element %d doesn't contain a value key",i);
+		
+		if(zend_hash_find(d_hash,"key",sizeof("key"),(void**) &key)!=SUCCESS)
+			php_error(E_ERROR,"Fuse.opt_parse: element %d doesn't contain a key key",i);
+		if(Z_TYPE_PP(key)!=IS_LONG)
+			php_error(E_ERROR,"Fuse.opt_parse: element %d key key is not a long",i);
+		
+//		php_printf("Element %d, current offset %ld, current size %ld\n",i,cur_offset,size);
+		switch(Z_TYPE_PP(initial)) {
+			case IS_LONG:
+				size+=sizeof(long);
+				udata=erealloc(udata,size);
+//				php_printf("element %d is long, resized to %ld, udata now at %lx\n",i,size,udata);
+				*(long*)((char*)(udata)+cur_offset)=Z_LVAL_PP(initial);
+//				printf("set value of %lx to %lx\n",((char*)(udata)+cur_offset),Z_LVAL_PP(initial));
+				(*fopts)[*num_fopts].offset=cur_offset; //set this here before modifying it and thus causing overflow!
+				cur_offset+=sizeof(long);
+			break;
+			case IS_STRING:
+				//Allocate two char*, because fuse will overwrite the first. By comparing with the second, free can later check
+				//if fuse messed up and leaked memory.
+				size+=sizeof(char*)*2;
+				udata=erealloc(udata,size);
+//				php_printf("element %d is string, resized to %ld, udata now at %lx\n",i,size,udata);
+				*(char**)((char*)(udata)+cur_offset)=estrndup(Z_STRVAL_PP(initial),Z_STRLEN_PP(initial));
+				*(char**)((char*)(udata)+cur_offset+sizeof(char*))=*(char**)((char*)(udata)+cur_offset);
+//				printf("set value of %lx to %lx, content '%s'\n",((char*)(udata)+cur_offset),*(char**)((char*)(udata)+cur_offset),Z_STRVAL_PP(initial));
+				(*fopts)[*num_fopts].offset=cur_offset;
+				cur_offset+=sizeof(char*)*2;
+			break;
+			default:
+				php_error(E_ERROR,"Fuse.opt_parse: element %d initial value is neither int nor string",i);
+		}
+		// add entry in fopts
+		
+		(*fopts)[*num_fopts].templ=estrndup(Z_STRVAL_PP(templ),Z_STRLEN_PP(templ));;		
+		(*fopts)[*num_fopts].value=(int)Z_LVAL_PP(key);
+		*num_fopts=*num_fopts+1;
+//		php_printf("fopts now has %d opts, assigned %li bytes of RAM for %li bytes wide struct\n",*num_fopts,(sizeof(struct fuse_opt)*(*num_fopts+1)),sizeof(struct fuse_opt));
+		*fopts=safe_erealloc(*fopts,sizeof(struct fuse_opt),(*num_fopts)+1,0);
+		(*fopts)[*num_fopts].templ=NULL;
+		(*fopts)[*num_fopts].offset=0;
+		(*fopts)[*num_fopts].value=0;
+		i++;
+	}
+//	int c=1/0;
+	return udata;
+}
+//Helper method: destroy and free the udata
+void php_fuse_free_udata(void* udata) {
+	zval* array=*(zval**)((char*)(udata)+0);
+	
+	HashTable* array_hash=Z_ARRVAL_P(array);
+	HashPosition array_ptr;
+	int array_size=zend_hash_num_elements(array_hash);
+//	php_printf("php_fuse_free_udata: init with %d elements\n",array_size);
+	
+	if(array_size==0) //nothing to do here
+		return;
+	
+	int i=0;
+	zval** d;
+	unsigned long cur_offset=sizeof(void*);//for fuse_opt.offset
+	
+	for(zend_hash_internal_pointer_reset_ex(array_hash, &array_ptr); zend_hash_get_current_data_ex(array_hash, (void**) &d, &array_ptr) == SUCCESS; zend_hash_move_forward_ex(array_hash, &array_ptr)) {
+		zval** initial; //initial value for the udata field
+		zval** v;	//the value of the zval, temp
+		
+//		php_printf("Element %d, type %d/%s\n",i,Z_TYPE_PP(d),zend_get_type_by_const(Z_TYPE_PP(d)));
+		if(Z_TYPE_PP(d)!=IS_ARRAY)
+			php_error(E_ERROR,"Fuse.opt_parse: element %d is not an array",i);
+		HashTable* d_hash=Z_ARRVAL_PP(d);
+		
+		if(zend_hash_find(d_hash,"value",sizeof("value"),(void**) &v)!=SUCCESS)
+			php_error(E_ERROR,"Fuse.opt_parse: element %d doesn't contain a value key",i);
+		initial=v;
+		
+//		php_printf("Element %d, current offset %ld, udata at %lx\n",i,cur_offset,udata);
+		switch(Z_TYPE_PP(initial)) {
+			case IS_LONG:
+//				php_printf("element %d is long, nothing to free here\n",i);
+				cur_offset+=sizeof(long);
+			break;
+			case IS_STRING:
+//				php_printf("element %d is string, offset %d, loc %lx, loc_backup %lx, content '%s'\n",i,cur_offset,*(char**)((char*)(udata)+cur_offset),*(char**)((char*)(udata)+cur_offset+sizeof(char*)),*(char**)((char*)(udata)+cur_offset));
+				//Free the backup, because if fuse overwrote the "original" we have a problem...
+				udata=udata; //pointless hack: a declaration can't be the first thing after case
+				char* orig=*(char**)((char*)(udata)+cur_offset);
+				char* backup=*(char**)((char*)(udata)+cur_offset+sizeof(char*));
+				if(orig!=backup) {
+					efree(backup);
+					free(orig);
+//					printf("freed %lx (orig) and %lx (backup)\n",orig,backup);
+				} else {
+					efree(backup);
+//					printf("freed %lx (orig)\n",orig,backup);
+				}
+				
+				cur_offset+=sizeof(char*)*2;
+			break;
+			default:
+				php_error(E_ERROR,"Fuse.opt_parse: element %d initial value is neither int nor string",i);
+		}
+		i++;
+	}
+	efree(udata);
+//	php_printf("free done\n");
+	return;
+}
+
 PHP_FUSE_API int php_fuse_opt_parse_proc(void* data, const char* arg, int key, struct fuse_args* outargs) {
 //	php_printf("----\nopt_parse_proc called from external. Key is %d, arg is %s, outargs.argc is %d, outargs.argv are:\n",key,arg,outargs->argc);
 	int i;
@@ -1714,9 +1913,7 @@ PHP_FUSE_API int php_fuse_opt_parse_proc(void* data, const char* arg, int key, s
 	int ret=0;
 	
 	//step 1: convert the parameters to zvals so they can be passed to userland
-	zval* arg_data;
-	ALLOC_INIT_ZVAL(arg_data);
-	array_init(arg_data);
+	zval* arg_data=php_fuse_get_udata(data);
 
 	zval* arg_arg;
 	ALLOC_INIT_ZVAL(arg_arg);
@@ -1813,6 +2010,7 @@ PHP_FUSE_API int php_fuse_opt_parse_proc(void* data, const char* arg, int key, s
 	return ret;
 }
 
+
 static PHP_METHOD(Fuse, opt_parse) {
 	zval *object = getThis();
 	int i;
@@ -1898,24 +2096,30 @@ static PHP_METHOD(Fuse, opt_parse) {
 	fopts[i].offset=0;
 	fopts[i].value=0;
 
-	int ret=fuse_opt_parse(&fargs,NULL,fopts,php_fuse_opt_parse_proc);
+	//now, get the udata "struct"
+	void* udata=php_fuse_init_udata(data,&fopts,&opts_size);
+	
+	int ret=fuse_opt_parse(&fargs,udata,fopts,php_fuse_opt_parse_proc);
 
 	if(ret==-1)
 		php_error(E_ERROR,"Fuse.opt_parse: fuse_opt_parse returned error");
 
-	php_printf("Fuse.opt_parse: returned from fuse_opt_parse, fargs is now %d\n",fargs.argc);
+//	php_printf("Fuse.opt_parse: returned from fuse_opt_parse, fargs is now %d\n",fargs.argc);
 	
-	//copy over to zval $av
+	//copy over to zval $argv
 	zend_hash_clean(av_hash);
 	for(i=0;i<fargs.argc;i++) {
 //		php_printf("'%s'\n",fargs.argv[i]);
 		add_index_string(av,i,fargs.argv[i],1);
 	}
+	//copy over to zval $argc
 	ZVAL_LONG(z_ac,fargs.argc);
 	
+	php_fuse_free_udata(udata);
 	for(i=0;i<opts_size;i++) {
-		if(fopts[i].templ)
+		if(fopts[i].templ) {
 			efree((char*) fopts[i].templ); //manually discard const flag
+		}
 	}
 	efree(fopts);
 	fuse_opt_free_args(&fargs);
