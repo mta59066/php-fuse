@@ -1683,9 +1683,6 @@ zval* php_fuse_get_udata(void* udata) {
 	int array_size=zend_hash_num_elements(array_hash);
 //	php_printf("php_fuse_get_udata: init with %d elements\n",array_size);
 	
-	if(array_size==0) //nothing to do here
-		return;
-	
 	int i=0;
 	zval** d;
 	unsigned long cur_offset=sizeof(void*);//for fuse_opt.offset
@@ -1737,9 +1734,6 @@ void php_fuse_set_udata(void* udata, zval* user_array) {
 		php_error(E_ERROR,"Fuse.opt_parse: size mismatch in writeback from original %d to returned %d",array_size,user_array_size);
 	
 //	php_printf("php_fuse_set_udata: init with %d elements\n",array_size);
-	
-	if(array_size==0) //nothing to do here
-		return;
 	
 	int i=0;
 	zval** d;
@@ -1803,9 +1797,6 @@ void* php_fuse_init_udata(zval* array, struct fuse_opt** fopts, int* num_fopts) 
 	int array_size=zend_hash_num_elements(array_hash);
 //	php_printf("php_fuse_init_udata: init with %d elements, fopts array has %d elements\n",array_size,*num_fopts);
 	
-	if(array_size==0) //nothing to do here
-		return NULL;
-	
 	int i=0;
 	zval** d;
 	unsigned long cur_offset=sizeof(void*);//for fuse_opt.offset
@@ -1814,7 +1805,7 @@ void* php_fuse_init_udata(zval* array, struct fuse_opt** fopts, int* num_fopts) 
 	void* udata=emalloc(size);
 //	php_printf("udata located @ 0x%lx\n",udata);
 	*(zval**)((char*)(udata)+0)=array;
-	
+
 	for(zend_hash_internal_pointer_reset_ex(array_hash, &array_ptr); zend_hash_get_current_data_ex(array_hash, (void**) &d, &array_ptr) == SUCCESS; zend_hash_move_forward_ex(array_hash, &array_ptr)) {
 		zval** templ;
 		zval** initial; //initial value for the udata field
@@ -1887,9 +1878,6 @@ void php_fuse_free_udata(void* udata) {
 	HashPosition array_ptr;
 	int array_size=zend_hash_num_elements(array_hash);
 //	php_printf("php_fuse_free_udata: init with %d elements\n",array_size);
-	
-	if(array_size==0) //nothing to do here
-		return;
 	
 	int i=0;
 	zval** d;
