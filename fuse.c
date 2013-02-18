@@ -1771,7 +1771,7 @@ void php_fuse_set_udata(void* udata, zval* user_array) {
 	if(array_size!=user_array_size)
 		php_error(E_ERROR,"Fuse.opt_parse: size mismatch in writeback from original %d to returned %d",array_size,user_array_size);
 	
-	php_printf("php_fuse_set_udata: init with %d elements\n",array_size);
+//	php_printf("php_fuse_set_udata: init with %d elements\n",array_size);
 	
 	if(array_size==0) //nothing to do here
 		return;
@@ -1784,7 +1784,7 @@ void php_fuse_set_udata(void* udata, zval* user_array) {
 		zval** initial; //initial value for the udata field
 		zval** v;	//the value of the zval, temp
 		
-		php_printf("Element %d, type %d/%s\n",i,Z_TYPE_PP(d),zend_get_type_by_const(Z_TYPE_PP(d)));
+//		php_printf("Element %d, type %d/%s\n",i,Z_TYPE_PP(d),zend_get_type_by_const(Z_TYPE_PP(d)));
 		
 		if(Z_TYPE_PP(d)!=IS_ARRAY)
 			php_error(E_ERROR,"Fuse.opt_parse: element %d is not an array",i);
@@ -1799,10 +1799,10 @@ void php_fuse_set_udata(void* udata, zval* user_array) {
 			php_error(E_ERROR,"Fuse.opt_parse: could not locate element %d in user-array",i);
 		if(Z_TYPE_PP(initial)!=Z_TYPE_PP(v))
 			php_error(E_ERROR,"Fuse.opt_parse: writeback type mismatch for element %d, original %d/%s, user-array: %d/%s",i,Z_TYPE_PP(initial),zend_get_type_by_const(Z_TYPE_PP(initial)),Z_TYPE_PP(v),zend_get_type_by_const(Z_TYPE_PP(v)));
-		php_printf("Element %d, current offset %ld\n",i,cur_offset);
+//		php_printf("Element %d, current offset %ld\n",i,cur_offset);
 		switch(Z_TYPE_PP(initial)) {
 			case IS_LONG:
-				php_printf("updated lv from %ld to %ld\n",*(long*)((char*)(udata)+cur_offset),Z_LVAL_PP(v));
+//				php_printf("updated lv from %ld to %ld\n",*(long*)((char*)(udata)+cur_offset),Z_LVAL_PP(v));
 				*(long*)((char*)(udata)+cur_offset)=Z_LVAL_PP(v);
 				cur_offset+=sizeof(long);
 			break;
@@ -1811,7 +1811,7 @@ void php_fuse_set_udata(void* udata, zval* user_array) {
 				char* orig=*(char**)((char*)(udata)+cur_offset);
 				char* backup=*(char**)((char*)(udata)+cur_offset+sizeof(char*));
 				char* newstr=Z_STRVAL_PP(v);
-				php_printf("updating str from '%s' to '%s'\n",orig,newstr);
+//				php_printf("updating str from '%s' to '%s'\n",orig,newstr);
 				if(orig!=backup) {
 					efree(backup);
 					free(orig);
@@ -1914,7 +1914,7 @@ void* php_fuse_init_udata(zval* array, struct fuse_opt** fopts, int* num_fopts) 
 //	int c=1/0;
 	return udata;
 }
-//Helper method: destroy and free the udata
+//Helper method: write back to zval, destroy and free the udata
 void php_fuse_free_udata(void* udata) {
 	zval* array=*(zval**)((char*)(udata)+0);
 	
@@ -1947,6 +1947,7 @@ void php_fuse_free_udata(void* udata) {
 		switch(Z_TYPE_PP(initial)) {
 			case IS_LONG:
 //				php_printf("element %d is long, nothing to free here\n",i);
+				ZVAL_LONG(*initial,*(long*)((char*)(udata)+cur_offset));
 				cur_offset+=sizeof(long);
 			break;
 			case IS_STRING:
@@ -1955,6 +1956,7 @@ void php_fuse_free_udata(void* udata) {
 				udata=udata; //pointless hack: a declaration can't be the first thing after case
 				char* orig=*(char**)((char*)(udata)+cur_offset);
 				char* backup=*(char**)((char*)(udata)+cur_offset+sizeof(char*));
+				ZVAL_STRING(*initial,orig,1);
 				if(orig!=backup) {
 					efree(backup);
 					free(orig);

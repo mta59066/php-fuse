@@ -33,21 +33,21 @@ class Sample4Fuse extends Fuse {
                        "-D"=>$this->argopt_keys["KEY_DIR_METHOD2"],
                        "-n "=>$this->argopt_keys["KEY_DEMO_SPACE"]
   );
-  $this->dataopts=array(array("templ"=>"-s=%s","value"=>"","key"=>$this->argopt_keys["KEY_DEMO_STRING"]),
-                        array("templ"=>"-i=%lu","value"=>0,"key"=>$this->argopt_keys["KEY_DEMO_INT"])
+  $this->dataopts=array(array("templ"=>"-s=%s","value"=>"foobar","key"=>$this->argopt_keys["KEY_DEMO_STRING"]),
+                        array("templ"=>"-i=%lu","value"=>1337,"key"=>$this->argopt_keys["KEY_DEMO_INT"]),
   );
  }
  public function main($argc,$argv) {   
-  printf("argc is %d, argv is ('%s')\n",$argc,implode("', '",$argv));
+  printf("main begin: argc is %d, argv is ('%s')\n",$argc,implode("', '",$argv));
   $res=$this->opt_parse($argc,$argv,$this->dataopts,$this->argopts,array($this,"opt_proc"));
   if($res===false) {
     printf("Error in opt_parse\n");
     exit;
   }
-  printf("argc now %d, argv now ('%s')\n",$argc,implode("', '",$argv));
+  printf("main end: argc now %d, argv now ('%s'), dataopts:\n%s\n",$argc,implode("', '",$argv),print_r($this->dataopts,true));
  }
  
- public function opt_proc($data,$arg,$key,&$argc,&$argv) {
+ public function opt_proc(&$data,$arg,$key,&$argc,&$argv) {
    // return -1 to indicate error, 0 to accept parameter,1 to retain parameter and pase to FUSE
    printf("opt_proc called. arg is '%s', key is %d, argc is %d, argv is ('%s'), data is\n%s\n",$arg,$key,$argc,implode("', '",$argv),print_r($data,true));
    switch($key) {
@@ -99,9 +99,12 @@ Options specific to php-fusepassfs:
         printf("monitor in fg\n");
         array_push($argv,"-f");
         $argc++;
+        $data[0]="luuulz";
         return 0;
       break;
       case $this->argopt_keys["KEY_DIR_METHOD2"]:
+        printf("dirmethod 2\n");
+        $data[1]=31337;
         $this->use_readdir_method2=true;
         return 0;
       break;
