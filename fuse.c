@@ -1716,7 +1716,7 @@ zval* php_fuse_get_udata(void* udata) {
 	HashTable* array_hash=Z_ARRVAL_P(array);
 	HashPosition array_ptr;
 	int array_size=zend_hash_num_elements(array_hash);
-	php_printf("php_fuse_get_udata: init with %d elements\n",array_size);
+//	php_printf("php_fuse_get_udata: init with %d elements\n",array_size);
 	
 	if(array_size==0) //nothing to do here
 		return;
@@ -1729,7 +1729,7 @@ zval* php_fuse_get_udata(void* udata) {
 		zval** initial; //initial value for the udata field
 		zval** v;	//the value of the zval, temp
 		
-		php_printf("Element %d, type %d/%s\n",i,Z_TYPE_PP(d),zend_get_type_by_const(Z_TYPE_PP(d)));
+//		php_printf("Element %d, type %d/%s\n",i,Z_TYPE_PP(d),zend_get_type_by_const(Z_TYPE_PP(d)));
 		if(Z_TYPE_PP(d)!=IS_ARRAY)
 			php_error(E_ERROR,"Fuse.opt_parse: element %d is not an array",i);
 		HashTable* d_hash=Z_ARRVAL_PP(d);
@@ -1738,7 +1738,7 @@ zval* php_fuse_get_udata(void* udata) {
 			php_error(E_ERROR,"Fuse.opt_parse: element %d doesn't contain a value key",i);
 		initial=v;
 		
-		php_printf("Element %d, current offset %ld\n",i,cur_offset);
+//		php_printf("Element %d, current offset %ld\n",i,cur_offset);
 		switch(Z_TYPE_PP(initial)) {
 			case IS_LONG:
 				add_next_index_long(ret,*(long*)((char*)(udata)+cur_offset));
@@ -1757,7 +1757,79 @@ zval* php_fuse_get_udata(void* udata) {
 	return ret;
 }
 //Helper method: update the values in a PHP ZVAL array following the format in the docs
-void php_fuse_set_udata(zval* array, void* udata) {
+void php_fuse_set_udata(void* udata, zval* user_array) {
+	zval* array=*(zval**)((char*)(udata)+0);
+	
+	HashTable* array_hash=Z_ARRVAL_P(array);
+	HashPosition array_ptr;
+	int array_size=zend_hash_num_elements(array_hash);
+	
+	if(Z_TYPE_P(user_array)!=IS_ARRAY)
+		php_error(E_ERROR,"Fuse.opt_parse: didn't supply an array for writeback");
+	HashTable* user_array_hash=Z_ARRVAL_P(user_array);
+	int user_array_size=zend_hash_num_elements(user_array_hash);
+	if(array_size!=user_array_size)
+		php_error(E_ERROR,"Fuse.opt_parse: size mismatch in writeback from original %d to returned %d",array_size,user_array_size);
+	
+	php_printf("php_fuse_set_udata: init with %d elements\n",array_size);
+	
+	if(array_size==0) //nothing to do here
+		return;
+	
+	int i=0;
+	zval** d;
+	unsigned long cur_offset=sizeof(void*);//for fuse_opt.offset
+	
+	for(zend_hash_internal_pointer_reset_ex(array_hash, &array_ptr); zend_hash_get_current_data_ex(array_hash, (void**) &d, &array_ptr) == SUCCESS; zend_hash_move_forward_ex(array_hash, &array_ptr)) {
+		zval** initial; //initial value for the udata field
+		zval** v;	//the value of the zval, temp
+		
+		php_printf("Element %d, type %d/%s\n",i,Z_TYPE_PP(d),zend_get_type_by_const(Z_TYPE_PP(d)));
+		
+		if(Z_TYPE_PP(d)!=IS_ARRAY)
+			php_error(E_ERROR,"Fuse.opt_parse: element %d is not an array",i);
+		HashTable* d_hash=Z_ARRVAL_PP(d);
+		
+		if(zend_hash_find(d_hash,"value",sizeof("value"),(void**) &v)!=SUCCESS)
+			php_error(E_ERROR,"Fuse.opt_parse: element %d doesn't contain a value key",i);
+		initial=v;
+		
+		//search in user_array for the i'th element
+		if(zend_hash_index_find(user_array_hash,i,(void**) &v)!=SUCCESS)
+			php_error(E_ERROR,"Fuse.opt_parse: could not locate element %d in user-array",i);
+		if(Z_TYPE_PP(initial)!=Z_TYPE_PP(v))
+			php_error(E_ERROR,"Fuse.opt_parse: writeback type mismatch for element %d, original %d/%s, user-array: %d/%s",i,Z_TYPE_PP(initial),zend_get_type_by_const(Z_TYPE_PP(initial)),Z_TYPE_PP(v),zend_get_type_by_const(Z_TYPE_PP(v)));
+		php_printf("Element %d, current offset %ld\n",i,cur_offset);
+		switch(Z_TYPE_PP(initial)) {
+			case IS_LONG:
+				php_printf("updated lv from %ld to %ld\n",*(long*)((char*)(udata)+cur_offset),Z_LVAL_PP(v));
+				*(long*)((char*)(udata)+cur_offset)=Z_LVAL_PP(v);
+				cur_offset+=sizeof(long);
+			break;
+			case IS_STRING:
+				udata=udata; //no declarations as first statement after cas
+				char* orig=*(char**)((char*)(udata)+cur_offset);
+				char* backup=*(char**)((char*)(udata)+cur_offset+sizeof(char*));
+				char* newstr=Z_STRVAL_PP(v);
+				php_printf("updating str from '%s' to '%s'\n",orig,newstr);
+				if(orig!=backup) {
+					efree(backup);
+					free(orig);
+//					printf("freed %lx (orig) and %lx (backup)\n",orig,backup);
+				} else {
+					efree(backup);
+//					printf("freed %lx (orig)\n",orig,backup);
+				}
+				*(char**)((char*)(udata)+cur_offset)=estrndup(Z_STRVAL_PP(v),Z_STRLEN_PP(v));
+				*(char**)((char*)(udata)+cur_offset+sizeof(char*))=*(char**)((char*)(udata)+cur_offset);
+				cur_offset+=sizeof(char*)*2;
+			break;
+			default:
+				php_error(E_ERROR,"Fuse.opt_parse: element %d initial value is neither int nor string",i);
+		}
+		i++;
+	}
+
 }
 //Helper method: allocate and initialize udata from PHP ZVAL array; modify fopts array to accomodate new options
 void* php_fuse_init_udata(zval* array, struct fuse_opt** fopts, int* num_fopts) {
@@ -1994,7 +2066,10 @@ PHP_FUSE_API int php_fuse_opt_parse_proc(void* data, const char* arg, int key, s
 		php_error(E_ERROR,"php_fuse_opt_parse_proc: Userland returned failure");
 	}
 	
-	//step 3: clean up
+	//step 3: write back changes in userdata
+	php_fuse_set_udata(data,arg_data);
+	
+	//step 4: clean up
 //	php_printf("opt_parse_proc returned from userland. outargs.argc is %d, outargs.argv are:\n",outargs->argc);
 //	for(i=0;i<outargs->argc;i++)
 //		php_printf("'%s'\n",outargs->argv[i]);
