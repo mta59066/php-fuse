@@ -50,14 +50,14 @@ ZEND_GET_MODULE(fuse)
 #endif
 
 /* {{{ php_fuse_call_method() (copy from zend_call_method - ze takes only 2 parameters...why?) */
-#define php_fuse_call_method_with_0_params(obj, obj_ce, fn_proxy, function_name, retval) php_fuse_call_method(obj, obj_ce, fn_proxy, function_name, sizeof(function_name)-1, retval, 0 TSRMLS_CC)
-#define php_fuse_call_method_with_1_params(obj, obj_ce, fn_proxy, function_name, retval, arg1) php_fuse_call_method(obj, obj_ce, fn_proxy, function_name, sizeof(function_name)-1, retval, 1 TSRMLS_CC, &arg1)
-#define php_fuse_call_method_with_2_params(obj, obj_ce, fn_proxy, function_name, retval, arg1, arg2) php_fuse_call_method(obj, obj_ce, fn_proxy, function_name, sizeof(function_name)-1, retval, 2 TSRMLS_CC, &arg1, &arg2)
-#define php_fuse_call_method_with_3_params(obj, obj_ce, fn_proxy, function_name, retval, arg1, arg2, arg3) php_fuse_call_method(obj, obj_ce, fn_proxy, function_name, sizeof(function_name)-1, retval, 3 TSRMLS_CC, &arg1, &arg2, &arg3)
-#define php_fuse_call_method_with_4_params(obj, obj_ce, fn_proxy, function_name, retval, arg1, arg2, arg3, arg4) php_fuse_call_method(obj, obj_ce, fn_proxy, function_name, sizeof(function_name)-1, retval, 4 TSRMLS_CC, &arg1, &arg2, &arg3, &arg4)
-#define php_fuse_call_method_with_5_params(obj, obj_ce, fn_proxy, function_name, retval, arg1, arg2, arg3, arg4, arg5) php_fuse_call_method(obj, obj_ce, fn_proxy, function_name, sizeof(function_name)-1, retval, 5 TSRMLS_CC, &arg1, &arg2, &arg3, &arg4, &arg5)
+#define php_fuse_call_method_with_0_params(obj, obj_ce, fn_proxy, function_name, retval) php_fuse_call_method(obj, obj_ce, fn_proxy, function_name, sizeof(function_name)-1, retval TSRMLS_CC, 0)
+#define php_fuse_call_method_with_1_params(obj, obj_ce, fn_proxy, function_name, retval, arg1) php_fuse_call_method(obj, obj_ce, fn_proxy, function_name, sizeof(function_name)-1, retval TSRMLS_CC, 1 , &arg1)
+#define php_fuse_call_method_with_2_params(obj, obj_ce, fn_proxy, function_name, retval, arg1, arg2) php_fuse_call_method(obj, obj_ce, fn_proxy, function_name, sizeof(function_name)-1, retval TSRMLS_CC, 2 , &arg1, &arg2)
+#define php_fuse_call_method_with_3_params(obj, obj_ce, fn_proxy, function_name, retval, arg1, arg2, arg3) php_fuse_call_method(obj, obj_ce, fn_proxy, function_name, sizeof(function_name)-1, retval TSRMLS_CC, 3 , &arg1, &arg2, &arg3)
+#define php_fuse_call_method_with_4_params(obj, obj_ce, fn_proxy, function_name, retval, arg1, arg2, arg3, arg4) php_fuse_call_method(obj, obj_ce, fn_proxy, function_name, sizeof(function_name)-1, retval TSRMLS_CC, 4 , &arg1, &arg2, &arg3, &arg4)
+#define php_fuse_call_method_with_5_params(obj, obj_ce, fn_proxy, function_name, retval, arg1, arg2, arg3, arg4, arg5) php_fuse_call_method(obj, obj_ce, fn_proxy, function_name, sizeof(function_name)-1, retval TSRMLS_CC, 5 , &arg1, &arg2, &arg3, &arg4, &arg5)
 
-static zval* php_fuse_call_method(zval **object_pp, zend_class_entry *obj_ce, zend_function **fn_proxy, char *function_name, int function_name_len, zval **retval_ptr_ptr, int param_count TSRMLS_DC, ...) {
+static zval* php_fuse_call_method(zval **object_pp, zend_class_entry *obj_ce, zend_function **fn_proxy, char *function_name, int function_name_len, zval **retval_ptr_ptr TSRMLS_DC, int param_count, ...) {
 	int result;
 	zend_fcall_info fci;
 	zval z_fname;
@@ -148,7 +148,7 @@ static zval* php_fuse_call_method(zval **object_pp, zend_class_entry *obj_ce, ze
 
 /* {{{ fuse call back functions */
 PHP_FUSE_API int php_fuse_getattr(const char * path, struct stat * st) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -291,9 +291,9 @@ PHP_FUSE_API int php_fuse_getattr(const char * path, struct stat * st) {
 }
 
 PHP_FUSE_API int php_fuse_readlink(const char * path, char * buf, size_t buf_len) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
-	
+
 	pthread_mutex_lock(&FUSEG(m));
 	
 	active_object = FUSEG(active_object);
@@ -337,7 +337,7 @@ PHP_FUSE_API int php_fuse_readlink(const char * path, char * buf, size_t buf_len
 }
 
 PHP_FUSE_API int php_fuse_getdir(const char * path, fuse_dirh_t dh, fuse_dirfil_t df) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -420,7 +420,7 @@ PHP_FUSE_API int php_fuse_getdir(const char * path, fuse_dirh_t dh, fuse_dirfil_
 }
 
 PHP_FUSE_API int php_fuse_mknod(const char * path, mode_t mode, dev_t dev) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -462,7 +462,7 @@ PHP_FUSE_API int php_fuse_mknod(const char * path, mode_t mode, dev_t dev) {
 }
 
 PHP_FUSE_API int php_fuse_mkdir(const char * path, mode_t mode) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -500,7 +500,7 @@ PHP_FUSE_API int php_fuse_mkdir(const char * path, mode_t mode) {
 }
 
 PHP_FUSE_API int php_fuse_unlink(const char * path) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -533,7 +533,7 @@ PHP_FUSE_API int php_fuse_unlink(const char * path) {
 }
 
 PHP_FUSE_API int php_fuse_rmdir(const char * path) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -566,7 +566,7 @@ PHP_FUSE_API int php_fuse_rmdir(const char * path) {
 }
 
 PHP_FUSE_API int php_fuse_symlink(const char * path_from, const char * path_to) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -605,7 +605,7 @@ PHP_FUSE_API int php_fuse_symlink(const char * path_from, const char * path_to) 
 }
 
 PHP_FUSE_API int php_fuse_rename(const char * path_from, const char * path_to) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -644,7 +644,7 @@ PHP_FUSE_API int php_fuse_rename(const char * path_from, const char * path_to) {
 }
 
 PHP_FUSE_API int php_fuse_link(const char * path_from, const char * path_to) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -683,7 +683,7 @@ PHP_FUSE_API int php_fuse_link(const char * path_from, const char * path_to) {
 }
 
 PHP_FUSE_API int php_fuse_chmod(const char * path, mode_t mode) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -721,7 +721,7 @@ PHP_FUSE_API int php_fuse_chmod(const char * path, mode_t mode) {
 }
 
 PHP_FUSE_API int php_fuse_chown(const char * path, uid_t uid, gid_t gid) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -764,8 +764,7 @@ PHP_FUSE_API int php_fuse_chown(const char * path, uid_t uid, gid_t gid) {
 }
 
 PHP_FUSE_API int php_fuse_truncate(const char * path, off_t offset) {
-	
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -803,7 +802,7 @@ PHP_FUSE_API int php_fuse_truncate(const char * path, off_t offset) {
 }
 
 PHP_FUSE_API int php_fuse_utime(const char * path, struct utimbuf * buf) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -846,7 +845,7 @@ PHP_FUSE_API int php_fuse_utime(const char * path, struct utimbuf * buf) {
 }
 
 PHP_FUSE_API int php_fuse_open(const char * path, struct fuse_file_info * fi) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -888,7 +887,7 @@ PHP_FUSE_API int php_fuse_open(const char * path, struct fuse_file_info * fi) {
 }
 
 PHP_FUSE_API int php_fuse_read(const char * path, char * buf, size_t buf_len, off_t offset, struct fuse_file_info * fi) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -957,7 +956,7 @@ PHP_FUSE_API int php_fuse_read(const char * path, char * buf, size_t buf_len, of
 }
 
 PHP_FUSE_API int php_fuse_write(const char * path, const char * buf, size_t buf_len, off_t offset, struct fuse_file_info * fi) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -1014,7 +1013,7 @@ PHP_FUSE_API int php_fuse_write(const char * path, const char * buf, size_t buf_
 }
 
 PHP_FUSE_API int php_fuse_statfs(const char * path, struct statfs * st) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -1107,7 +1106,7 @@ PHP_FUSE_API int php_fuse_statfs(const char * path, struct statfs * st) {
 }
 
 PHP_FUSE_API int php_fuse_flush(const char * path, struct fuse_file_info * fi) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -1145,7 +1144,7 @@ PHP_FUSE_API int php_fuse_flush(const char * path, struct fuse_file_info * fi) {
 }
 
 PHP_FUSE_API int php_fuse_release(const char * path, struct fuse_file_info * fi) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -1183,7 +1182,7 @@ PHP_FUSE_API int php_fuse_release(const char * path, struct fuse_file_info * fi)
 }
 
 PHP_FUSE_API int php_fuse_fsync(const char * path, int mode, struct fuse_file_info * fi) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -1226,7 +1225,7 @@ PHP_FUSE_API int php_fuse_fsync(const char * path, int mode, struct fuse_file_in
 }
 
 PHP_FUSE_API int php_fuse_setxattr(const char * path, const char * name, const char * value, size_t value_len, int flag) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -1277,7 +1276,7 @@ PHP_FUSE_API int php_fuse_setxattr(const char * path, const char * name, const c
 }
 
 PHP_FUSE_API int php_fuse_getxattr(const char * path, const char * name, char * value, size_t value_len) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -1329,7 +1328,7 @@ PHP_FUSE_API int php_fuse_getxattr(const char * path, const char * name, char * 
 }
 
 PHP_FUSE_API int php_fuse_listxattr(const char * path, char * list, size_t list_len) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -1399,7 +1398,7 @@ PHP_FUSE_API int php_fuse_listxattr(const char * path, char * list, size_t list_
 }
 
 PHP_FUSE_API int php_fuse_removexattr(const char * path, const char * name) {
-	
+	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -1932,6 +1931,7 @@ void php_fuse_free_udata(void* udata) {
 }
 
 PHP_FUSE_API int php_fuse_opt_parse_proc(void* data, const char* arg, int key, struct fuse_args* outargs) {
+	TSRMLS_FETCH();
 //	php_printf("----\nopt_parse_proc called from external. Key is %d, arg is %s, outargs.argc is %d, outargs.argv are:\n",key,arg,outargs->argc);
 	int i;
 //	for(i=0;i<outargs->argc;i++)
@@ -1994,7 +1994,7 @@ PHP_FUSE_API int php_fuse_opt_parse_proc(void* data, const char* arg, int key, s
 	FUSEG(proc_fci).param_count=5;
 	FUSEG(proc_fci).params=args;
 
-	if (zend_call_function(&FUSEG(proc_fci),&FUSEG(proc_fcic))==SUCCESS) {
+	if (zend_call_function(&FUSEG(proc_fci),&FUSEG(proc_fcic) TSRMLS_CC)==SUCCESS) {
 		if(!retval_ptr)
 			php_error(E_ERROR,"php_fuse_opt_parse_proc: retval_ptr is null");
 		if(Z_TYPE_P(retval_ptr)!=IS_LONG)
