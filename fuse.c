@@ -1598,7 +1598,7 @@ static PHP_METHOD(Fuse, fuse_main) {
 #ifndef PHP_FUSE_ALLOW_MT
         //enforce single threading
         if(!have_singlethread) {
-        	php_error(E_WARNING,"Fuse.fuse_main: User did not supply -s for single-thread operation");
+//        	php_error(E_WARNING,"Fuse.fuse_main: User did not supply -s for single-thread operation");
         	av_c=erealloc(av_c,sizeof(char*)*(ac+1));
         	av_c[ac]=estrdup("-s");
         	add_next_index_string(av,"-s",1);
