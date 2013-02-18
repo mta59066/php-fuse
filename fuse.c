@@ -1914,6 +1914,9 @@ void php_fuse_free_udata(void* udata) {
 				udata=udata; //pointless hack: a declaration can't be the first thing after case
 				char* orig=*(char**)((char*)(udata)+cur_offset);
 				char* backup=*(char**)((char*)(udata)+cur_offset+sizeof(char*));
+				//free the old value of the ZVAL to avoid leaking it's old content
+				if(Z_STRVAL_PP(initial))
+					efree(Z_STRVAL_PP(initial));
 				ZVAL_STRING(*initial,orig,1);
 				if(orig!=backup) {
 					efree(backup);
