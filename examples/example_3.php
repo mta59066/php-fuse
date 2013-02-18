@@ -1,4 +1,9 @@
 <?php
+//Load FUSE, if it isn't already loaded by php.ini
+if (!extension_loaded("fuse"))
+    dl("fuse.so");
+error_reporting(E_ALL);
+
 class Sample3Fuse extends Fuse {
   public function __construct() {
     printf("phpfuse: %s called\n",__FUNCTION__);
@@ -134,9 +139,5 @@ class Sample3Fuse extends Fuse {
   }
 }
 
-echo "prog begin\n";
 $fuse = new Sample3Fuse();
-echo "mounting\n";
-$fuse->mount("/tmp/phpfusemount", array("debug"));
-echo "done\n";
-?>
+$fuse->fuse_main($argc,$argv);
