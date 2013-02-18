@@ -39,7 +39,7 @@ class PHPRAMFS extends Fuse {
         $this->userdata = array(
             array(
                 "templ" => "-s=%s",
-                "value" => "",
+                "value" => "omgfail",
                 "key" => $this->opt_keys["KEY_DUMMYFILE_S"]
             ),
             array(
@@ -157,6 +157,7 @@ Options specific to %1\$s:
     }
     
     public function getattr($path, &$st) {
+    printf("getattr called, path $path\n----\n");
         $st['dev']     = 0;
         $st['ino']     = 0;
         $st['mode']    = 0;

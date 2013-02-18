@@ -153,6 +153,7 @@ static zval* php_fuse_call_method(zval **object_pp, zend_class_entry *obj_ce, ze
 /* {{{ fuse call back functions */
 PHP_FUSE_API int php_fuse_getattr(const char * path, struct stat * st) {
 	TSRMLS_FETCH();
+	printf("php_fuse_getattr called, path '%s'\n",path);
 	zval *active_object = NULL;
 	
 	pthread_mutex_lock(&FUSEG(m));
@@ -160,6 +161,7 @@ PHP_FUSE_API int php_fuse_getattr(const char * path, struct stat * st) {
 	active_object = FUSEG(active_object);
 	
 	if (active_object == NULL) {
+		printf("active_object is null\n");
 		pthread_mutex_unlock(&FUSEG(m));
 		return -ENOENT;
 	}
@@ -1571,7 +1573,7 @@ static PHP_METHOD(Fuse, fuse_main) {
 	}
 
 	FUSEG(active_object) = object;
-
+php_printf("this is at %lx, global is at %lx\n",object,FUSEG(active_object));
 	av_hash=Z_ARRVAL_P(av);
 	av_size=zend_hash_num_elements(av_hash);
 	
@@ -1669,7 +1671,7 @@ static PHP_METHOD(Fuse, fuse_main) {
 	efree(av_c);
 
 	FUSEG(active_object) = NULL;
-
+	php_printf("reset active_object to NULL\n");
 	return;
 }
 
@@ -2438,7 +2440,7 @@ PHP_MINIT_FUNCTION(fuse) {
 /* {{{ PHP_RINIT_FUNCTION */
 PHP_RINIT_FUNCTION(fuse) {
 	FUSEG(active_object) = NULL;
-
+php_printf("rinit: reset active_object to NULL\n");
 	return SUCCESS;
 }
 /* }}} */
