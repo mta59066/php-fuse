@@ -41,7 +41,11 @@ zend_module_entry fuse_module_entry = {
 	NULL,
 	PHP_MINFO(fuse),
 	"0.9.2", 
-	STANDARD_MODULE_PROPERTIES
+	PHP_MODULE_GLOBALS(fuse),
+	NULL,
+	NULL,
+	NULL,
+	STANDARD_MODULE_PROPERTIES_EX
 };
 /* }}} */
 
