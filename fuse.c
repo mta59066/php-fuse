@@ -161,7 +161,7 @@ PHP_FUSE_API int php_fuse_getattr(const char * path, struct stat * st) {
 	active_object = FUSEG(active_object);
 	
 	if (active_object == NULL) {
-		printf("active_object is null\n");
+		printf("active_object is null at %lx, pid %d tid %lu\n",&FUSEG(active_object),getpid(),(unsigned long)pthread_self());
 		pthread_mutex_unlock(&FUSEG(m));
 		return -ENOENT;
 	}
@@ -1573,7 +1573,7 @@ static PHP_METHOD(Fuse, fuse_main) {
 	}
 
 	FUSEG(active_object) = object;
-php_printf("this is at %lx, global is at %lx\n",object,FUSEG(active_object));
+php_printf("this is at %lx, global is %lx at %lx, pid %d tid %lu\n",object,FUSEG(active_object),&FUSEG(active_object),getpid(),(unsigned long)pthread_self());
 	av_hash=Z_ARRVAL_P(av);
 	av_size=zend_hash_num_elements(av_hash);
 	
@@ -1671,7 +1671,7 @@ php_printf("this is at %lx, global is at %lx\n",object,FUSEG(active_object));
 	efree(av_c);
 
 	FUSEG(active_object) = NULL;
-	php_printf("reset active_object to NULL\n");
+	php_printf("reset active_object to NULL at %lx, pid %d tid %lu\n",&FUSEG(active_object),getpid(),(unsigned long)pthread_self());
 	return;
 }
 
@@ -2329,17 +2329,19 @@ zend_function_entry php_fuse_methods[] = {
 /* }}} */
 
 static php_fuse_globals_ctor(zend_fuse_globals *globals TSRMLS_DC) {
+php_printf("mutex init, pid %d tid %lu\n",getpid(),(unsigned long)pthread_self());
 	pthread_mutex_init(&globals->m, NULL);
 }
 
 static php_fuse_globals_dtor(zend_fuse_globals *globals TSRMLS_DC) {
+php_printf("mutex destroy, pid %d tid %lu\n",getpid(),(unsigned long)pthread_self());
 	pthread_mutex_destroy(&globals->m);
 }
 
 /* {{{ PHP_MINIT_FUNCTION */
 PHP_MINIT_FUNCTION(fuse) {
 	zend_class_entry ce;
-
+	php_printf("minit\n");
 	INIT_CLASS_ENTRY(ce, "Fuse", php_fuse_methods); 
 	php_fuse_ce = zend_register_internal_class(&ce TSRMLS_CC);
 	php_fuse_ce->create_object = php_fuse_object_handler_new;
@@ -2443,7 +2445,7 @@ PHP_MINIT_FUNCTION(fuse) {
 /* {{{ PHP_RINIT_FUNCTION */
 PHP_RINIT_FUNCTION(fuse) {
 	FUSEG(active_object) = NULL;
-php_printf("rinit: reset active_object to NULL\n");
+php_printf("rinit: reset active_object to NULL at %lx, pid %d tid %lu\n",&FUSEG(active_object),getpid(),(unsigned long)pthread_self());
 	return SUCCESS;
 }
 /* }}} */
