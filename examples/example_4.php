@@ -1,57 +1,56 @@
 <?php
-//See https://github.com/jrk/passfs/blob/master/opts.c for the C equivalent of this file
+//See https://github.com/jrk/passfs/blob/master/opts.c for an idea how the argopt stuff works
+
+//Load FUSE, if it isn't already loaded by php.ini
 if (!extension_loaded("fuse"))
     dl("fuse.so");
 error_reporting(E_ALL);
-class Sample4Fuse extends Fuse {
-    public $root = "";
-    public $stats_enabled = false;
+
+class PHPRAMFS extends Fuse {
+    //basic needed stuff
+    public $name = "phpramfs";
+    public $version = "1.3.37";
+    
+    //our own data
+    public $show_dummyfile = false; //show '/dummyfile'
+    public $dummyfile_n_name = ""; //if not empty, show '/dummyfile.VALUE'
+    
     public function __construct() {
-        //The enum at line 27, as PHP doesn't know enums, use $i as hack
-        //Do not forget $i++, else opt_parse will whine.
-        $i                 = 0;
-        $this->argopt_keys = array(
-            "KEY_STATS" => $i++,
-            "KEY_HELP" => $i++,
-            "KEY_FUSE_HELP" => $i++,
-            "KEY_VERSION" => $i++,
-            "KEY_DEBUG" => $i++,
-            "KEY_MONITOR" => $i++,
-            "KEY_MONITOR_FILE" => $i++,
-            "KEY_DIR_METHOD2" => $i++,
-            "KEY_DEMO_INT" => $i++,
-            "KEY_DEMO_STRING" => $i++,
-            "KEY_DEMO_SPACE" => $i++
+        $this->opt_keys = array_flip(array(
+            "KEY_HELP",
+            "KEY_FUSE_HELP",
+            "KEY_VERSION",
+            "KEY_DEBUG",
+            "KEY_DUMMYFILE",
+            "KEY_DUMMYFILE_I",
+            "KEY_DUMMYFILE_S",
+            "KEY_DUMMYFILE_N"
+        ));
+        $this->opts     = array(
+            "--help" => $this->opt_keys["KEY_HELP"],
+            "--version" => $this->opt_keys["KEY_VERSION"],
+            "-h" => $this->opt_keys["KEY_HELP"],
+            "-H" => $this->opt_keys["KEY_FUSE_HELP"],
+            "-V" => $this->opt_keys["KEY_VERSION"],
+            "dummyfile" => $this->opt_keys["KEY_DUMMYFILE"],
+            "-d" => $this->opt_keys["KEY_DEBUG"],
+            "-n " => $this->opt_keys["KEY_DUMMYFILE_N"]
         );
-        $this->argopts     = array(
-            "--help" => $this->argopt_keys["KEY_HELP"],
-            "--version" => $this->argopt_keys["KEY_VERSION"],
-            "-h" => $this->argopt_keys["KEY_HELP"],
-            "-H" => $this->argopt_keys["KEY_FUSE_HELP"],
-            "-V" => $this->argopt_keys["KEY_VERSION"],
-            "stats" => $this->argopt_keys["KEY_STATS"],
-            "-d" => $this->argopt_keys["KEY_DEBUG"],
-            "-m" => $this->argopt_keys["KEY_MONITOR"],
-            "-m=" => $this->argopt_keys["KEY_MONITOR_FILE"],
-            "-D" => $this->argopt_keys["KEY_DIR_METHOD2"],
-            "-n " => $this->argopt_keys["KEY_DEMO_SPACE"]
-        );
-        $this->dataopts    = array(
+        $this->userdata = array(
             array(
                 "templ" => "-s=%s",
-                "value" => "foobar",
-                "key" => $this->argopt_keys["KEY_DEMO_STRING"]
+                "value" => "",
+                "key" => $this->opt_keys["KEY_DUMMYFILE_S"]
             ),
             array(
                 "templ" => "-i=%lu",
-                "value" => 1337,
-                "key" => $this->argopt_keys["KEY_DEMO_INT"]
+                "value" => 0,
+                "key" => $this->opt_keys["KEY_DUMMYFILE_I"]
             )
         );
     }
     public function main($argc, $argv) {
-        printf("main begin: argc is %d, argv is ('%s')\n", $argc, implode("', '", $argv));
-        $res = $this->opt_parse($argc, $argv, $this->dataopts, $this->argopts, array(
+        $res = $this->opt_parse($argc, $argv, $this->userdata, $this->opts, array(
             $this,
             "opt_proc"
         ));
@@ -59,76 +58,65 @@ class Sample4Fuse extends Fuse {
             printf("Error in opt_parse\n");
             exit;
         }
-        printf("main end: argc now %d, argv now ('%s'), dataopts:\n%s\n", $argc, implode("', '", $argv), print_r($this->dataopts, true));
+        $this->fuse_main($argc, $argv);
     }
-    
     public function opt_proc(&$data, $arg, $key, &$argc, &$argv) {
         // return -1 to indicate error, 0 to accept parameter,1 to retain parameter and pase to FUSE
-        printf("opt_proc called. arg is '%s', key is %d, argc is %d, argv is ('%s'), data is\n%s\n", $arg, $key, $argc, implode("', '", $argv), print_r($data, true));
         switch ($key) {
             case FUSE_OPT_KEY_NONOPT:
-                if ($this->root == "") {
-                    $this->root = $arg;
-                    return 0;
-                } else
-                    return 1;
+                return 1;
                 break;
-            case $this->argopt_keys["KEY_STATS"]:
-                $this->stats_enabled = 1;
+            case $this->opt_keys["KEY_DUMMYFILE"]:
+                printf("Showing dummy file\n");
+                $this->show_dummyfile = true;
+                
                 return 0;
                 break;
-            case $this->argopt_keys["KEY_FUSE_HELP"]:
+            case $this->opt_keys["KEY_FUSE_HELP"]:
+                //Add a parameter to tell fuse to show its extended help
                 array_push($argv, "-ho");
                 $argc++;
-            case $this->argopt_keys["KEY_HELP"]:
-                printf("php-fusepassfs
-by John Cobb <j.c.cobb@qmul.ac.uk>, adapted to PHP by Marco Schuster <marco@m-s-d.eu>
+            //No break, because we display our own help, and fuse adds its help then
+            case $this->opt_keys["KEY_HELP"]:
+                fprintf(STDERR, "%1\$s
+Marco Schuster <marco@m-s-d.eu>
 
-FUSE demo
+PHP-FUSE demo
 
-Usage: %s [options] root_path mountpoint
+Usage: %2\$s [options] mountpoint
 
 Options:
     -o opt,[opt...]           mount options
     -h --help                 this help
     -H                        more help
     -V --version              print version info
+    -d                        debug mode
 
-Options specific to php-fusepassfs:
-    -m                        monitor to STDOUT
-    -m=file                   monitor to file
-    -D                        implement use of offset in readdir interface
-    -o stats                  show statistics in the file 'stats' under the mountpoint
-", $argv[0]);
+Options specific to %1\$s:
+    -o dummyfile              show an empty 'dummyfile' file in mountpoint root
+    -s=content                set the content of the 'dummyfile.s'
+    -i=size                   set the size of 'dummyfile.i' reported by getattr() (will be filled with nullbytes)
+    -n name                   show a dummy file 'dummyfile.NAME' in mountpoint root
+
+", $this->name, $argv[0]);
+                
                 return 0;
                 break;
-            case $this->argopt_keys["KEY_VERSION"]:
-                printf("php-fusepassfs v. 0.1.3.3.7\n");
+            case $this->opt_keys["KEY_VERSION"]:
+                printf("%s %s\n", $this->name, $this->version);
+                
                 return 1;
                 break;
-            case $this->argopt_keys["KEY_DEBUG"]:
+            case $this->opt_keys["KEY_DEBUG"]:
                 printf("debug mode enabled\n");
+                
                 return 1;
                 break;
-            case $this->argopt_keys["KEY_MONITOR"]:
-                printf("monitor in fg\n");
-                array_push($argv, "-f");
-                $argc++;
-                $data[0] = "luuulz";
-                return 0;
-                break;
-            case $this->argopt_keys["KEY_DIR_METHOD2"]:
-                printf("dirmethod 2\n");
-                $data[1]                   = 31337;
-                $this->use_readdir_method2 = true;
-                return 0;
-                break;
-            case $this->argopt_keys["KEY_MONITOR_FILE"]:
-                printf("monitor to file '%s'\n", $arg);
-                return 0;
-                break;
-            case $this->argopt_keys["KEY_DEMO_SPACE"]:
-                printf("demonstration parameter -n value=%s\n", $arg);
+            case $this->opt_keys["KEY_DUMMYFILE_N"]:
+                $arg = substr($arg, 2); //the -x value form strips the space between -x and the value
+                printf("Showing dummy file 'dummyfile.%s'\n", $arg);
+                $this->dummyfile_n_name = $arg;
+                
                 return 0;
                 break;
             default:
@@ -148,6 +136,23 @@ Options specific to php-fusepassfs:
         $retval["test.txt"] = array(
             'type' => FUSE_DT_REG
         );
+        if ($this->dummyfile_n_name != "")
+            $retval["dummyfile." . $this->dummyfile_n_name] = array(
+                'type' => FUSE_DT_REG
+            );
+        if ($this->show_dummyfile)
+            $retval["dummyfile"] = array(
+                'type' => FUSE_DT_REG
+            );
+        if ($this->userdata[0]["value"] !== "")
+            $retval["dummyfile.s"] = array(
+                'type' => FUSE_DT_REG
+            );
+        if ($this->userdata[1]["value"] !== 0)
+            $retval["dummyfile.i"] = array(
+                'type' => FUSE_DT_REG
+            );
+        
         return 0;
     }
     
@@ -170,10 +175,26 @@ Options specific to php-fusepassfs:
             $st['mode']  = FUSE_S_IFDIR | 0775;
             $st['nlink'] = 3;
             $st['size']  = 0;
-        } else if ($path == "/test.txt") {
+        } elseif ($path == "/test.txt") {
             $st['mode']  = FUSE_S_IFREG | 0664;
             $st['nlink'] = 1;
             $st['size']  = 12;
+        } elseif ($path == "/dummyfile") {
+            $st['mode']  = FUSE_S_IFREG | 0664;
+            $st['nlink'] = 1;
+            $st['size']  = 0;
+        } elseif ($path == "/dummyfile.i") {
+            $st['mode']  = FUSE_S_IFREG | 0664;
+            $st['nlink'] = 1;
+            $st['size']  = (int) $this->userdata[1]["value"];
+        } elseif ($path == "/dummyfile.s") {
+            $st['mode']  = FUSE_S_IFREG | 0664;
+            $st['nlink'] = 1;
+            $st['size']  = strlen($this->userdata[0]["value"]);
+        } elseif ($path == "/dummyfile." . $this->dummyfile_n_name) {
+            $st['mode']  = FUSE_S_IFREG | 0664;
+            $st['nlink'] = 1;
+            $st['size']  = 0;
         }
         
         return 0;
@@ -181,9 +202,19 @@ Options specific to php-fusepassfs:
     public function open($path, $mode) {
         return 1;
     }
-    
     public function read($path, $fh, $offset, $buf_len, &$buf) {
-        $buf = "hello world\n";
+        if ($path == "/test.txt") {
+            $buf = "hello world\n";
+        } elseif ($path == "/dummyfile") {
+            $buf = "";
+        } elseif ($path == "/dummyfile.i") {
+            $buf = str_pad("", $this->userdata[1]["value"]);
+        } elseif ($path == "/dummyfile.s") {
+            $buf = $this->userdata[0]["value"];
+        } elseif ($path == "/dummyfile." . $this->dummyfile_n_name) {
+            $buf = "";
+        }
+        
         return strlen($buf);
     }
     
@@ -192,7 +223,5 @@ Options specific to php-fusepassfs:
     }
 }
 
-
-$fuse = new Sample4Fuse();
+$fuse = new PHPRAMFS();
 $fuse->main($argc, $argv);
-?>

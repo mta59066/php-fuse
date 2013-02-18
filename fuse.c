@@ -1554,72 +1554,42 @@ static PHP_METHOD(Fuse, fuse_constructor) {
 	return;
 }
 
-static PHP_METHOD(Fuse, mount) {
+static PHP_METHOD(Fuse, fuse_main) {
 	zval *object = getThis();
-
-	const char *path = NULL;
-	int path_len = 0;
-	zval* optarray;		//array of Fuse options
-	HashTable* opthash;	//HashTable of the array
-	HashPosition optptr;	//Pointer to the position in the array
-	int optsize;		//Size of the options array
-
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s|a", &path, &path_len, &optarray) == FAILURE) {
+	
+	long ac;
+	zval* av;
+	HashTable* av_hash;
+	HashPosition av_ptr;
+	int av_size;
+	
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "la", &ac, &av) == FAILURE) {
 		return;
 	}
 
 	FUSEG(active_object) = object;
 
-	opthash=Z_ARRVAL_P(optarray);
-	optsize=zend_hash_num_elements(opthash);
-
-	int argc = 2+(2*optsize); //2 fixed elements (php_fuse,mountpoint), and optsize additional args	and a "-o" per arg
-	char **argv = safe_emalloc(sizeof(char*),argc,0);
-	char **elements=safe_emalloc(sizeof(char*),optsize,0); //to store the converted $options entries
-	char *p = estrdup(path);
-
-	int i = 0;
-	*(argv + i++) = "php_fuse";
+	av_hash=Z_ARRVAL_P(av);
+	av_size=zend_hash_num_elements(av_hash);
 	
-	//Now join argv with the user-supplied arguments
-	int j=-1;
-	zval** data;
-	for(zend_hash_internal_pointer_reset_ex(opthash, &optptr); zend_hash_get_current_data_ex(opthash, (void**) &data, &optptr) == SUCCESS; zend_hash_move_forward_ex(opthash, &optptr)) {
-		j++;
-		char* key;
-		uint key_len;
-		ulong index;
-		
-		//resulting element
-		char* element;
-		int elsize;
-		
-		zend_uint valtype=Z_TYPE_PP(data);
-		
-		if (Z_TYPE_PP(data) != IS_STRING) { //element is not a string, convert instead
-			zend_error(E_WARNING,"Fuse.mount: Option %d is not a string, but type %d instead. Converting silently.",j,Z_TYPE_PP(data));
-			convert_to_string_ex(data);
+	if(ac!=av_size)
+		php_error(E_ERROR,"Fuse.fuse_main: Size mismatch between argc=%d and sizeof(argv)=%d",ac,av_size);
+	
+//	php_printf("Fuse.fuse_main: launching with %d args",ac);
+	
+	char** av_c=safe_emalloc(sizeof(char*),ac,0);
+	zval** d;
+	int i=0;
+	for(zend_hash_internal_pointer_reset_ex(av_hash, &av_ptr); zend_hash_get_current_data_ex(av_hash, (void**) &d, &av_ptr) == SUCCESS; zend_hash_move_forward_ex(av_hash, &av_ptr)) {
+//		php_printf("Element %d",i);
+		if(Z_TYPE_PP(d)!=IS_STRING) {
+			php_error(E_WARNING,"Fuse.fuse_main: argv[%d] is not a string, converting silently",i);
+			convert_to_string_ex(d);
 		}
-		if (zend_hash_get_current_key_ex(opthash, &key, &key_len, &index, 0, &optptr) == HASH_KEY_IS_STRING) { //string=>string
-			//string key => the end value must be key=value
-			elsize=key_len+1+Z_STRLEN_PP(data); //key_len+'='+data_len, for unknown reasons one of them includes a nullbyte?!
-			element=safe_emalloc(elsize,sizeof(char),0);
-			memset(element,0,elsize);
-			strncat(element,key,key_len);
-			strncat(element,"=",1);
-			strncat(element,Z_STRVAL_PP(data),Z_STRLEN_PP(data));		
-			
-		} else { //int (or resource, or whatever)=>string, only use the value
-			elsize=Z_STRLEN_PP(data);
-			element=estrdup(Z_STRVAL_PP(data));
-		}
-		*(argv + i++)="-o";
-		*(argv + i++)=element;
-		*(elements + j)=element;
-	}
-
-	*(argv + i++) = p;
-
+		av_c[i]=estrndup(Z_STRVAL_PP(d),Z_STRLEN_PP(d));
+		i++;
+        }
+	
 	struct fuse_operations op;
 	memset(&op, 0, sizeof(struct fuse_operations));
 	zend_class_entry *object_ce = Z_OBJCE_P(object);
@@ -1689,16 +1659,11 @@ static PHP_METHOD(Fuse, mount) {
 		}
 	}
 
-	add_property_string(object, "_mount_point", p, 1);
-
-	fuse_main(argc, argv, &op);
-
-	efree(p);
-	efree(argv);
+	fuse_main(ac, av_c, &op);
 	
-	for(i=0;i<optsize;i++)
-		efree(elements[i]);
-	efree(elements);
+	for(i=0;i<ac;i++)
+		efree(av_c[i]);
+	efree(av_c);
 
 	FUSEG(active_object) = NULL;
 
@@ -1717,9 +1682,6 @@ zval* php_fuse_get_udata(void* udata) {
 	HashPosition array_ptr;
 	int array_size=zend_hash_num_elements(array_hash);
 //	php_printf("php_fuse_get_udata: init with %d elements\n",array_size);
-	
-	if(array_size==0) //nothing to do here
-		return;
 	
 	int i=0;
 	zval** d;
@@ -1772,9 +1734,6 @@ void php_fuse_set_udata(void* udata, zval* user_array) {
 		php_error(E_ERROR,"Fuse.opt_parse: size mismatch in writeback from original %d to returned %d",array_size,user_array_size);
 	
 //	php_printf("php_fuse_set_udata: init with %d elements\n",array_size);
-	
-	if(array_size==0) //nothing to do here
-		return;
 	
 	int i=0;
 	zval** d;
@@ -1838,9 +1797,6 @@ void* php_fuse_init_udata(zval* array, struct fuse_opt** fopts, int* num_fopts) 
 	int array_size=zend_hash_num_elements(array_hash);
 //	php_printf("php_fuse_init_udata: init with %d elements, fopts array has %d elements\n",array_size,*num_fopts);
 	
-	if(array_size==0) //nothing to do here
-		return NULL;
-	
 	int i=0;
 	zval** d;
 	unsigned long cur_offset=sizeof(void*);//for fuse_opt.offset
@@ -1849,7 +1805,7 @@ void* php_fuse_init_udata(zval* array, struct fuse_opt** fopts, int* num_fopts) 
 	void* udata=emalloc(size);
 //	php_printf("udata located @ 0x%lx\n",udata);
 	*(zval**)((char*)(udata)+0)=array;
-	
+
 	for(zend_hash_internal_pointer_reset_ex(array_hash, &array_ptr); zend_hash_get_current_data_ex(array_hash, (void**) &d, &array_ptr) == SUCCESS; zend_hash_move_forward_ex(array_hash, &array_ptr)) {
 		zval** templ;
 		zval** initial; //initial value for the udata field
@@ -1922,9 +1878,6 @@ void php_fuse_free_udata(void* udata) {
 	HashPosition array_ptr;
 	int array_size=zend_hash_num_elements(array_hash);
 //	php_printf("php_fuse_free_udata: init with %d elements\n",array_size);
-	
-	if(array_size==0) //nothing to do here
-		return;
 	
 	int i=0;
 	zval** d;
@@ -2206,7 +2159,7 @@ static PHP_METHOD(Fuse, opt_parse) {
 /* }}} */
 
 /* {{{ fuse method entries */
-ZEND_BEGIN_ARG_INFO_EX(arginfo_fuse_mount, 0, 0, 1)
+ZEND_BEGIN_ARG_INFO_EX(arginfo_fuse_fuse_main, 0, 0, 1)
 	ZEND_ARG_INFO(0, path)				// string
 ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_INFO_EX(arginfo_fuse_opt_parse, 0, 0, 2)
@@ -2332,7 +2285,7 @@ ZEND_END_ARG_INFO()
 
 zend_function_entry php_fuse_methods[] = {
 	ZEND_MALIAS(Fuse,	__construct,	fuse_constructor,	NULL,	ZEND_ACC_PUBLIC)
-	PHP_ME(Fuse,	mount,			arginfo_fuse_mount,		ZEND_ACC_PUBLIC|ZEND_ACC_FINAL)
+	PHP_ME(Fuse,	fuse_main,		arginfo_fuse_fuse_main,		ZEND_ACC_PUBLIC|ZEND_ACC_FINAL)
 	PHP_ME(Fuse,	opt_parse,		arginfo_fuse_opt_parse,		ZEND_ACC_PUBLIC|ZEND_ACC_FINAL)
 	/*
     PHP_ME(Fuse,	getattr,		arginfo_fuse_getattr,		ZEND_ACC_PUBLIC)

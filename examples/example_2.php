@@ -1,4 +1,9 @@
 <?php
+//Load FUSE, if it isn't already loaded by php.ini
+if (!extension_loaded("fuse"))
+    dl("fuse.so");
+error_reporting(E_ALL);
+
 class Sample2Fuse extends Fuse {
   public function getdir($path, &$retval) { 
     if ($path != "/") {
@@ -52,5 +57,4 @@ class Sample2Fuse extends Fuse {
 }
 
 $fuse = new Sample2Fuse();
-$fuse->mount("/tmp/phpfusemount", array("allow_other","debug","uid"=>"20000"));
-?>
+$fuse->fuse_main($argc,$argv);
