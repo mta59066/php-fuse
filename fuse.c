@@ -159,10 +159,7 @@ PHP_FUSE_API int php_fuse_getattr(const char * path, struct stat * st) {
 	
 	active_object = FUSEG(active_object);
 	
-	printf("getattr: global at %lx,, pid %d tid %lu\n",&FUSEG(active_object),getpid(),(unsigned long)pthread_self());
-	
 	if (active_object == NULL) {
-		printf("active_object is null at %lx, pid %d tid %lu\n",&FUSEG(active_object),getpid(),(unsigned long)pthread_self());
 		pthread_mutex_unlock(&FUSEG(m));
 		return -ENOENT;
 	}
@@ -1574,7 +1571,7 @@ static PHP_METHOD(Fuse, fuse_main) {
 	}
 
 	FUSEG(active_object) = object;
-php_printf("this is at %lx, global is %lx at %lx, pid %d tid %lu\n",object,FUSEG(active_object),&FUSEG(active_object),getpid(),(unsigned long)pthread_self());
+
 	av_hash=Z_ARRVAL_P(av);
 	av_size=zend_hash_num_elements(av_hash);
 	
@@ -1586,15 +1583,29 @@ php_printf("this is at %lx, global is %lx at %lx, pid %d tid %lu\n",object,FUSEG
 	char** av_c=safe_emalloc(sizeof(char*),ac,0);
 	zval** d;
 	int i=0;
+	int have_singlethread=0; //did the user supply -s? if not, we must to avoid threading problems!
 	for(zend_hash_internal_pointer_reset_ex(av_hash, &av_ptr); zend_hash_get_current_data_ex(av_hash, (void**) &d, &av_ptr) == SUCCESS; zend_hash_move_forward_ex(av_hash, &av_ptr)) {
 //		php_printf("Element %d",i);
 		if(Z_TYPE_PP(d)!=IS_STRING) {
 			php_error(E_WARNING,"Fuse.fuse_main: argv[%d] is not a string, converting silently",i);
 			convert_to_string_ex(d);
 		}
+		if(strcmp(Z_STRVAL_PP(d),"-s")==0)
+			have_singlethread=1;
 		av_c[i]=estrndup(Z_STRVAL_PP(d),Z_STRLEN_PP(d));
 		i++;
         }
+#ifndef PHP_FUSE_ALLOW_MT
+        //enforce single threading
+        if(!have_singlethread) {
+        	php_error(E_WARNING,"Fuse.fuse_main: User did not supply -s for single-thread operation");
+        	av_c=erealloc(av_c,sizeof(char*)*(ac+1));
+        	av_c[ac]=estrdup("-s");
+        	add_next_index_string(av,"-s",1);
+        	ac++;
+        	av_size++;
+	}
+#endif
 	
 	struct fuse_operations op;
 	memset(&op, 0, sizeof(struct fuse_operations));
@@ -1672,7 +1683,6 @@ php_printf("this is at %lx, global is %lx at %lx, pid %d tid %lu\n",object,FUSEG
 	efree(av_c);
 
 	FUSEG(active_object) = NULL;
-	php_printf("reset active_object to NULL at %lx, pid %d tid %lu\n",&FUSEG(active_object),getpid(),(unsigned long)pthread_self());
 	return;
 }
 
@@ -2332,19 +2342,16 @@ zend_function_entry php_fuse_methods[] = {
 /* }}} */
 
 static php_fuse_globals_ctor(zend_fuse_globals *globals TSRMLS_DC) {
-php_printf("mutex init, pid %d tid %lu\n",getpid(),(unsigned long)pthread_self());
 	pthread_mutex_init(&globals->m, NULL);
 }
 
 static php_fuse_globals_dtor(zend_fuse_globals *globals TSRMLS_DC) {
-php_printf("mutex destroy, pid %d tid %lu\n",getpid(),(unsigned long)pthread_self());
 	pthread_mutex_destroy(&globals->m);
 }
 
 /* {{{ PHP_MINIT_FUNCTION */
 PHP_MINIT_FUNCTION(fuse) {
 	zend_class_entry ce;
-	php_printf("minit\n");
 	INIT_CLASS_ENTRY(ce, "Fuse", php_fuse_methods); 
 	php_fuse_ce = zend_register_internal_class(&ce TSRMLS_CC);
 	php_fuse_ce->create_object = php_fuse_object_handler_new;
@@ -2448,7 +2455,6 @@ PHP_MINIT_FUNCTION(fuse) {
 /* {{{ PHP_RINIT_FUNCTION */
 PHP_RINIT_FUNCTION(fuse) {
 	FUSEG(active_object) = NULL;
-php_printf("rinit: reset active_object to NULL at %lx, pid %d tid %lu\n",&FUSEG(active_object),getpid(),(unsigned long)pthread_self());
 	return SUCCESS;
 }
 /* }}} */

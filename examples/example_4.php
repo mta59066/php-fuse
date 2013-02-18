@@ -38,8 +38,8 @@ class PHPRAMFS extends Fuse {
         );
         $this->userdata = array(
             array(
-                "templ" => "-s=%s",
-                "value" => "omgfail",
+                "templ" => "-st=%s",
+                "value" => "",
                 "key" => $this->opt_keys["KEY_DUMMYFILE_S"]
             ),
             array(
@@ -113,7 +113,7 @@ Options specific to %1\$s:
                 return 1;
                 break;
             case $this->opt_keys["KEY_DUMMYFILE_N"]:
-                $arg = substr($arg, 2); //the -x value form strips the space between -x and the value
+                $arg = substr($arg, 3); //the -x value form strips the space between -x and the value
                 printf("Showing dummy file 'dummyfile.%s'\n", $arg);
                 $this->dummyfile_n_name = $arg;
                 
@@ -157,7 +157,6 @@ Options specific to %1\$s:
     }
     
     public function getattr($path, &$st) {
-    printf("getattr called, path $path\n----\n");
         $st['dev']     = 0;
         $st['ino']     = 0;
         $st['mode']    = 0;
