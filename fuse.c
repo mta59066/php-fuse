@@ -978,7 +978,8 @@ PHP_FUSE_API int php_fuse_write(const char * path, const char * buf, size_t buf_
 	zval *arg_buf;
 	zval *arg_offset;
 	char *p = estrdup(path);
-	char *q = emalloc(buf_len);
+	//buf is not nullbyte-terminated! we have to add it by hand here...
+	char *q = ecalloc(sizeof(char),buf_len+1);
 
 	MAKE_STD_ZVAL(arg_path);
 	ZVAL_STRING(arg_path, p, 0);
