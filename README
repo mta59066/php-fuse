@@ -1,8 +1,92 @@
-fuse module for PHP
+fuse binding for PHP
 ------------------------
+This extension allows you to build a FUSE-based virtual filesystem in PHP
+code.
 
-you can find documentation here:
-http://labs.gree.jp/Top/OpenSource/Fuse.html
+Prerequisites
+------------------------
+PHP5.6 (aka bleeding edge dev) is tested and compatible, compiling and
+running should be possible on 5.3.
 
-you can find details of FUSE here:
-http://fuse.sourceforge.net/
+x86 systems have not been tested at all. They're likely to make problems,
+too, because PHPs integer datatype is unsigned (31bit), which makes PHP able
+to only represent 2GB (as it's stated on every fs-related php manual page).
+There will be no official support for x86, it's simply a dying world.
+
+Options parsing
+------------------------
+Either you do your own, or use FUSEs (which is recommended, because it gives
+all filesystem mounters a consistent interface). There's a template in the
+examples/ directory that should help you to get started. Please note that
+the user_data function is only usable in opt_parse, and even there it's
+nearly not as flexible as the original.
+
+!!! Please note that fuse_main enforces -s to explicitly force single-threading !!!
+
+Supported operations
+------------------------
+getattr
+readlink
+getdir
+mknod
+mkdir
+unlink
+rmdir
+symlink
+rename
+link
+chmod
+chown
+truncate
+utime
+open
+read
+write
+statfs
+flush
+release
+fsync
+setxattr
+getxattr
+listxattr
+removexattr
+
+(Currently) Not supported operations
+------------------------
+opendir
+readdir
+releasedir
+fsyncdir
+init
+destroy
+access
+create
+ftruncate
+fgetattr
+lock
+utimens
+bmap
+ioctl
+write_buf
+read_buf
+flock
+fallocate
+
+TODO
+------------------------
+Thread safety - right now, a mutex should protect the object from
+multithreading issues, at least without ZTS. Enabling ZTS and then running the layer
+in multi-thread mode will lead to the bad situation that active_object and the mutex
+end up in different thread-local storages, or such. At least, the value of
+&FUSEG(active_object) is most likely to be NULL. For the love of God, please
+let your fingers off multi-threading!
+
+utime has to be replaced by utimens.
+
+init and destroy definitely should be implemented to allow safe
+setup/cleanup.
+
+Links
+------------------------
+- FUSE: http://fuse.sourceforge.net/
+- fuse.h: http://fuse.git.sourceforge.net/git/gitweb.cgi?p=fuse/fuse;a=blob;f=include/fuse.h
