@@ -78,6 +78,7 @@ static zval* php_fuse_call_method(zval **object_pp, zend_class_entry *obj_ce, ze
 		*(params+i) = tmp;
 	}
 	va_end(va_params);
+//	printf("%s(...) = ?\r\n", function_name);
 
 	fci.size = sizeof(fci);
 	/*fci.function_table = NULL; will be read form zend_class_entry of object if needed */
@@ -144,8 +145,11 @@ static zval* php_fuse_call_method(zval **object_pp, zend_class_entry *obj_ce, ze
 		if (retval) {
 			zval_ptr_dtor(&retval);
 		}
+//		printf("%s(...) = null\r\n", function_name);
 		return NULL;
 	}
+	long r = Z_LVAL_P(*retval_ptr_ptr);
+//	printf("%s(...) = %ld\r\n", function_name, r);
 	return *retval_ptr_ptr;
 }
 /* }}} */
@@ -316,6 +320,7 @@ PHP_FUSE_API int php_fuse_readlink(const char * path, char * buf, size_t buf_len
 	ZVAL_STRING(arg_path, p, 0);
 
 	MAKE_STD_ZVAL(arg_buf);
+	ZVAL_STRING(arg_buf, "", 0);
 
 	php_fuse_call_method_with_2_params(&active_object, Z_OBJCE_P(active_object), NULL, "readlink", &retval, arg_path, arg_buf);
 
@@ -332,11 +337,20 @@ PHP_FUSE_API int php_fuse_readlink(const char * path, char * buf, size_t buf_len
 	}
 
 	convert_to_string_ex(&arg_buf);
-	strncpy(buf, Z_STRVAL_P(arg_buf), buf_len);
+	if(Z_STRVAL_P(arg_buf) == NULL) {
+		zval_ptr_dtor(&arg_buf);
+		pthread_mutex_unlock(&FUSEG(m));
+		return 0;
+	}
+
+	int mr = Z_STRLEN_P(arg_buf);
+	memset(buf,'\0',buf_len);
+	memcpy(buf, Z_STRVAL_P(arg_buf), mr > buf_len ? buf_len : mr);
+	buf[buf_len-1] = '\0';
 	zval_ptr_dtor(&arg_buf);
 
 	pthread_mutex_unlock(&FUSEG(m));
-	
+
 	return r;
 }
 
@@ -848,6 +862,48 @@ PHP_FUSE_API int php_fuse_utime(const char * path, struct utimbuf * buf) {
 	return r;
 }
 
+PHP_FUSE_API int php_fuse_create(const char * path, mode_t mode, struct fuse_file_info *fi) {
+	TSRMLS_FETCH();
+	zval *active_object = NULL;
+	
+	pthread_mutex_lock(&FUSEG(m));
+	
+	active_object = FUSEG(active_object);
+	if (active_object == NULL) {
+		pthread_mutex_unlock(&FUSEG(m));
+		return -ENOENT;
+	}
+
+	/* handler call */
+	zval *retval;
+	zval *arg_path;
+	zval *arg_mode;
+	char *p = estrdup(path);
+
+	MAKE_STD_ZVAL(arg_path);
+	ZVAL_STRING(arg_path, p, 0);
+
+	MAKE_STD_ZVAL(arg_mode);
+	ZVAL_LONG(arg_mode, mode);
+
+	zend_call_method_with_2_params(&active_object, Z_OBJCE_P(active_object), NULL, "create", &retval, arg_path, arg_mode);
+
+	convert_to_long_ex(&retval);
+	long r = Z_LVAL_P(retval);
+	zval_ptr_dtor(&retval);
+	
+	if (r >= 0) {
+		fi->fh = (ulong)r;
+	}
+
+	zval_ptr_dtor(&arg_path);
+	zval_ptr_dtor(&arg_mode);
+
+	pthread_mutex_unlock(&FUSEG(m));
+	
+	return r >= 0 ? 0 : r;
+}
+
 PHP_FUSE_API int php_fuse_open(const char * path, struct fuse_file_info * fi) {
 	TSRMLS_FETCH();
 	zval *active_object = NULL;
@@ -1017,7 +1073,7 @@ PHP_FUSE_API int php_fuse_write(const char * path, const char * buf, size_t buf_
 	return r;
 }
 
-PHP_FUSE_API int php_fuse_statfs(const char * path, struct statfs * st) {
+PHP_FUSE_API int php_fuse_statfs(const char * path, struct statvfs * st) {
 	TSRMLS_FETCH();
 	zval *active_object = NULL;
 	
@@ -1077,10 +1133,10 @@ PHP_FUSE_API int php_fuse_statfs(const char * path, struct statfs * st) {
 
 		switch (zend_hash_get_current_key_ex(Z_ARRVAL_P(arg_st), &tmp_s_key, &tmp_s_key_len, &tmp_n_key, 0, &pos)) {	// no duplication
 		case HASH_KEY_IS_STRING:
-			if (strncmp(tmp_s_key, "type", tmp_s_key_len) == 0) {
-				st->f_type = value;
-			} else if (strncmp(tmp_s_key, "bsize", tmp_s_key_len) == 0) {
+			if (strncmp(tmp_s_key, "bsize", tmp_s_key_len) == 0) {
 				st->f_bsize = value;
+			} else if (strncmp(tmp_s_key, "frsize", tmp_s_key_len) == 0) {
+				st->f_frsize = value;
 			} else if (strncmp(tmp_s_key, "blocks", tmp_s_key_len) == 0) {
 				st->f_blocks = value;
 			} else if (strncmp(tmp_s_key, "bfree", tmp_s_key_len) == 0) {
@@ -1091,10 +1147,14 @@ PHP_FUSE_API int php_fuse_statfs(const char * path, struct statfs * st) {
 				st->f_files = value;
 			} else if (strncmp(tmp_s_key, "ffree", tmp_s_key_len) == 0) {
 				st->f_ffree = value;
+			} else if (strncmp(tmp_s_key, "favail", tmp_s_key_len) == 0) {
+				st->f_favail = value;
 			} else if (strncmp(tmp_s_key, "fsid", tmp_s_key_len) == 0) {
-				// not yet supported
-			} else if (strncmp(tmp_s_key, "namelen", tmp_s_key_len) == 0) {
-				st->f_namelen = value;
+				st->f_fsid = value;
+			} else if (strncmp(tmp_s_key, "flag", tmp_s_key_len) == 0) {
+				st->f_flag = value;
+			} else if (strncmp(tmp_s_key, "namemax", tmp_s_key_len) == 0) {
+				st->f_namemax = value;
 			}
 			break;
 		case HASH_KEY_IS_LONG:
@@ -1448,7 +1508,6 @@ PHP_FUSE_API int php_fuse_fsyncdir(const char *, int, struct fuse_file_info *);
 PHP_FUSE_API void* php_fuse_init(struct fuse_conn_info *conn);
 PHP_FUSE_API void php_fuse_destroy(void *);
 PHP_FUSE_API int php_fuse_access(const char *, int);
-PHP_FUSE_API int php_fuse_create(const char *, mode_t, struct fuse_file_info *);
 PHP_FUSE_API int php_fuse_ftruncate(const char *, off_t, struct fuse_file_info *);
 PHP_FUSE_API int php_fuse_fgetattr(const char *, struct stat *, struct fuse_file_info *);
 PHP_FUSE_API int php_fuse_lock(const char *, struct fuse_file_info *, int cmd, struct flock *);
@@ -1474,6 +1533,7 @@ static char * php_fuse_method_list[] = {
 	"truncate",
 	"utime",
 	"open",
+	"create",
 	"read",
 	"write",
 	"statfs",
@@ -1501,6 +1561,7 @@ static struct fuse_operations php_fuse_operations = {
 	.truncate		= php_fuse_truncate,
 	.utime			= php_fuse_utime,
 	.open			= php_fuse_open,
+	.create			= php_fuse_create,
 	.read			= php_fuse_read,
 	.write			= php_fuse_write,
 	.statfs			= php_fuse_statfs,
@@ -1510,7 +1571,7 @@ static struct fuse_operations php_fuse_operations = {
 	.setxattr		= php_fuse_setxattr,
 	.getxattr		= php_fuse_getxattr,
 	.listxattr		= php_fuse_listxattr,
-	.removexattr	= php_fuse_removexattr,
+	.removexattr		= php_fuse_removexattr,
 };
 
 static zend_class_entry *php_fuse_ce;
@@ -1655,24 +1716,26 @@ static PHP_METHOD(Fuse, fuse_main) {
 		case 14:
 			op.open = php_fuse_operations.open; break;
 		case 15:
-			op.read = php_fuse_operations.read; break;
+			op.create = php_fuse_operations.create; break;
 		case 16:
-			op.write = php_fuse_operations.write; break;
+			op.read = php_fuse_operations.read; break;
 		case 17:
-			op.statfs = php_fuse_operations.statfs; break;
+			op.write = php_fuse_operations.write; break;
 		case 18:
-			op.flush = php_fuse_operations.flush; break;
+			op.statfs = php_fuse_operations.statfs; break;
 		case 19:
-			op.release = php_fuse_operations.release; break;
+			op.flush = php_fuse_operations.flush; break;
 		case 20:
-			op.fsync = php_fuse_operations.fsync; break;
+			op.release = php_fuse_operations.release; break;
 		case 21:
-			op.setxattr = php_fuse_operations.setxattr; break;
+			op.fsync = php_fuse_operations.fsync; break;
 		case 22:
-			op.getxattr = php_fuse_operations.getxattr; break;
+			op.setxattr = php_fuse_operations.setxattr; break;
 		case 23:
-			op.listxattr = php_fuse_operations.listxattr; break;
+			op.getxattr = php_fuse_operations.getxattr; break;
 		case 24:
+			op.listxattr = php_fuse_operations.listxattr; break;
+		case 25:
 			op.removexattr = php_fuse_operations.removexattr; break;
 		}
 	}
@@ -2254,6 +2317,10 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_fuse_open, 0, 0, 2)
 	ZEND_ARG_INFO(0, path)			// string
 	ZEND_ARG_INFO(1, mode)			// int
 ZEND_END_ARG_INFO()
+ZEND_BEGIN_ARG_INFO_EX(arginfo_fuse_create, 0, 0, 2)
+	ZEND_ARG_INFO(0, path)			// string
+	ZEND_ARG_INFO(1, mode)			// int
+ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_INFO_EX(arginfo_fuse_read, 1, 0, 5)
 	ZEND_ARG_INFO(0, path)			// string
 	ZEND_ARG_INFO(0, handle)		// int
@@ -2326,6 +2393,7 @@ zend_function_entry php_fuse_methods[] = {
     PHP_ME(Fuse,	truncate,		arginfo_fuse_truncate,		ZEND_ACC_PUBLIC)
     PHP_ME(Fuse,	utime,			arginfo_fuse_utime,			ZEND_ACC_PUBLIC)
     PHP_ME(Fuse,	open,			arginfo_fuse_open,			ZEND_ACC_PUBLIC)
+    PHP_ME(Fuse,	create,			arginfo_fuse_create,			ZEND_ACC_PUBLIC)
     PHP_ME(Fuse,	read,			arginfo_fuse_read,			ZEND_ACC_PUBLIC)
     PHP_ME(Fuse,	write,			arginfo_fuse_write,			ZEND_ACC_PUBLIC)
     PHP_ME(Fuse,	statfs,			arginfo_fuse_statfs,		ZEND_ACC_PUBLIC)
