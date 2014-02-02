@@ -44,7 +44,7 @@ extern "C" {
 #include <sys/types.h>
 #include <sys/xattr.h>
 #include <fcntl.h>
-#define	FUSE_USE_VERSION	22
+#define	FUSE_USE_VERSION	25
 #define	_FILE_OFFSET_BITS	64
 #include <pthread.h>
 #include <fuse.h>
