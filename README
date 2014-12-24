@@ -23,6 +23,14 @@ nearly not as flexible as the original.
 
 !!! Please note that fuse_main enforces -s to explicitly force single-threading !!!
 
+Compiling
+------------------------
+$ phpize
+$ ./configure
+$ make
+
+To compile on OSX with OSXFUSE add --with-osxfuse to the configure line
+
 Supported operations
 ------------------------
 getattr

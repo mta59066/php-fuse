@@ -2,7 +2,23 @@ dnl
 dnl $ Id: $
 dnl
 
+export FUSE_LIBRARY=fuse
+
+PHP_ARG_WITH(osxfuse, whether osxfuse is available,[  --with-osxfuse[=DIR]    With osxfuse support],[no],[no])
 PHP_ARG_WITH(fuse, whether fuse is available,[  --with-fuse[=DIR]    With fuse support])
+
+if test "$PHP_OSXFUSE" != "no"; then
+  if test "$PHP_OSXFUSE" = "yes"; then
+	PHP_OSXFUSE="/usr/local/include/osxfuse"
+  fi
+  AC_DEFINE(FUSE_USE_VERSION, 25, [ ])
+  export FUSE_LIBRARY=osxfuse
+  if test -r "$PHP_OSXFUSE/fuse/fuse.h"; then
+	PHP_FUSE_DIR="$PHP_OSXFUSE/fuse"
+        PHP_ADD_INCLUDE($PHP_FUSE_DIR)
+  fi
+  PHP_SUBST(OSXFUSE_SHARED_LIBADD)
+fi
 
 if test "$PHP_FUSE" != "no"; then
 
@@ -34,9 +50,9 @@ if test "$PHP_FUSE" != "no"; then
   export CPPFLAGS="$OLD_CPPFLAGS"
   PHP_SUBST(FUSE_SHARED_LIBADD)
 
-  PHP_CHECK_LIBRARY(fuse, fuse_get_context,
+  PHP_CHECK_LIBRARY($FUSE_LIBRARY, fuse_get_context,
   [
-	PHP_ADD_LIBRARY_WITH_PATH(fuse, $PHP_FUSE_DIR/lib, FUSE_SHARED_LIBADD)
+	PHP_ADD_LIBRARY_WITH_PATH($FUSE_LIBRARY, $PHP_FUSE_DIR/lib, FUSE_SHARED_LIBADD)
   ],[
 	AC_MSG_ERROR([wrong fuse lib version or lib not found])
   ],[

@@ -1085,7 +1085,7 @@ PHP_FUSE_API int php_fuse_statfs(const char * path, struct statvfs * st) {
 		return -EFAULT;
 	}
 
-	memset(st, 0, sizeof(struct statfs));
+	memset(st, 0, sizeof(struct statvfs));
 
 	/* handler call */
 	zval *retval;
